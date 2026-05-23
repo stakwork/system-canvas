@@ -28,8 +28,10 @@ import { EdgeLabelEditor } from './EdgeLabelEditor.js'
 import { ConnectionHandles } from './ConnectionHandles.js'
 import { PendingEdgeRenderer } from './PendingEdgeRenderer.js'
 import { LanesBackground } from './LanesBackground.js'
+import { AlignmentGuidesLayer } from './AlignmentGuidesLayer.js'
 import type { ResizeCorner, ResizeOverride } from '../hooks/useNodeResize.js'
 import type { PendingEdgeState } from '../hooks/useEdgeCreate.js'
+import type { AlignmentGuide } from 'system-canvas'
 
 /**
  * Extra padding around each node's bounding box when hit-testing for hover.
@@ -144,6 +146,8 @@ interface ViewportProps {
   ) => void
   /** When true, enable handle-on-hover and pending-edge preview layer */
   edgeCreateEnabled?: boolean
+  /** Live alignment guides to render during drag. Rendered in canvas-space above all content. */
+  alignmentGuides?: AlignmentGuide[]
 }
 
 export interface ViewportHandle {
@@ -211,6 +215,7 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
       pendingEdge,
       onConnectionHandlePointerDown,
       edgeCreateEnabled,
+      alignmentGuides,
       autoFit = 'canvas-change',
       canvasRef,
       handoffTransform,
@@ -693,6 +698,11 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
               immediate={!!pendingEdge}
               activeSide={hoveredSide}
             />
+          )}
+
+          {/* Alignment guides — rendered above all nodes/edges, disappear on drag end */}
+          {alignmentGuides && alignmentGuides.length > 0 && (
+            <AlignmentGuidesLayer guides={alignmentGuides} />
           )}
 
           {/* Inline editor on top of the edited node */}

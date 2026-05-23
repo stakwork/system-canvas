@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import type { ResolvedNode, ViewportState, NodeUpdate } from 'system-canvas'
+import { snapToGrid } from 'system-canvas'
 
 export type ResizeCorner = 'nw' | 'ne' | 'sw' | 'se'
 
@@ -15,6 +16,11 @@ interface UseNodeResizeOptions {
   onCommit: (id: string, patch: NodeUpdate) => void
   /** Minimum node width/height in canvas-space. */
   minSize?: number
+  /**
+   * When > 0, resize dimensions are snapped to the nearest multiple of this
+   * value (in canvas units) live during resize. Defaults to 0 (off).
+   */
+  snapGridSize?: number
 }
 
 interface UseNodeResizeResult {
@@ -43,7 +49,7 @@ interface ResizeState {
 const DEFAULT_MIN_SIZE = 40
 
 export function useNodeResize(options: UseNodeResizeOptions): UseNodeResizeResult {
-  const { viewport, onCommit, minSize = DEFAULT_MIN_SIZE } = options
+  const { viewport, onCommit, minSize = DEFAULT_MIN_SIZE, snapGridSize = 0 } = options
 
   const [resizeOverrides, setResizeOverrides] = useState<Map<string, ResizeOverride>>(
     () => new Map()
@@ -101,6 +107,14 @@ export function useNodeResize(options: UseNodeResizeOptions): UseNodeResizeResul
           ny = st.startY + (st.startH - minSize)
         }
         nh = minSize
+      }
+
+      // Snap dimensions (and re-pin west/north edges so the fixed edge stays put).
+      if (snapGridSize > 0) {
+        nw = Math.max(minSize, snapToGrid(nw, snapGridSize))
+        nh = Math.max(minSize, snapToGrid(nh, snapGridSize))
+        if (st.corner === 'sw' || st.corner === 'nw') nx = st.startX + st.startW - nw
+        if (st.corner === 'ne' || st.corner === 'nw') ny = st.startY + st.startH - nh
       }
 
       const next = new Map(overridesRef.current)

@@ -61,6 +61,10 @@ interface NodeToolbarProps {
    * Called when a multi-select action fires — applied to every selected node.
    */
   onMultiPatch?: (patch: NodeUpdate) => void
+  /** Called when an align action fires from the multi-select toolbar. */
+  onAlign?: (direction: AlignDirection) => void
+  /** Called when a distribute action fires from the multi-select toolbar. */
+  onDistribute?: (axis: 'horizontal' | 'vertical') => void
 }
 
 /**
@@ -88,6 +92,8 @@ export function NodeToolbar({
   render,
   selectedNodes,
   onMultiPatch,
+  onAlign,
+  onDistribute,
 }: NodeToolbarProps) {
   const [viewport, setViewport] = useState<ViewportState>(() => getViewport())
 
@@ -237,6 +243,8 @@ export function NodeToolbar({
           theme={theme}
           onMultiPatch={onMultiPatch}
           onDelete={deleteNode}
+          onAlign={onAlign}
+          onDistribute={onDistribute}
         />
       ) : render ? (
         render({ node, theme, patch, deleteNode })
@@ -256,11 +264,15 @@ export function NodeToolbar({
 // Multi-select toolbar content
 // ---------------------------------------------------------------------------
 
+export type AlignDirection = 'left' | 'right' | 'top' | 'bottom' | 'centerH' | 'centerV'
+
 interface MultiToolbarContentProps {
   selectedNodes: ResolvedNode[]
   theme: CanvasTheme
   onMultiPatch: (patch: NodeUpdate) => void
   onDelete: () => void
+  onAlign?: (direction: AlignDirection) => void
+  onDistribute?: (axis: 'horizontal' | 'vertical') => void
 }
 
 function MultiToolbarContent({
@@ -268,6 +280,8 @@ function MultiToolbarContent({
   theme,
   onMultiPatch,
   onDelete,
+  onAlign,
+  onDistribute,
 }: MultiToolbarContentProps) {
   // Use the first node as the representative for action resolution.
   const representativeNode = selectedNodes[0]
@@ -353,6 +367,97 @@ function MultiToolbarContent({
           </React.Fragment>
         )
       })}
+
+      {/* Align group */}
+      {onAlign && (
+        <>
+          <Divider theme={theme} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: BUTTON_GAP }}>
+            {(
+              [
+                { dir: 'left',    label: 'Align Left',              path: 'M 3 3 L 3 13 M 5 6 L 13 6 M 5 10 L 11 10' },
+                { dir: 'right',   label: 'Align Right',             path: 'M 13 3 L 13 13 M 3 6 L 11 6 M 5 10 L 11 10' },
+                { dir: 'top',     label: 'Align Top',               path: 'M 3 3 L 13 3 M 6 5 L 6 13 M 10 5 L 10 11' },
+                { dir: 'bottom',  label: 'Align Bottom',            path: 'M 3 13 L 13 13 M 6 3 L 6 11 M 10 5 L 10 11' },
+                { dir: 'centerH', label: 'Center Horizontally',     path: 'M 8 3 L 8 13 M 5 6 L 11 6 M 4 10 L 12 10' },
+                { dir: 'centerV', label: 'Center Vertically',       path: 'M 3 8 L 13 8 M 6 5 L 6 11 M 10 4 L 10 12' },
+              ] as { dir: AlignDirection; label: string; path: string }[]
+            ).map(({ dir, label, path }) => (
+              <button
+                key={dir}
+                type="button"
+                title={label}
+                onClick={() => onAlign(dir)}
+                onMouseDown={(e) => e.preventDefault()}
+                style={{
+                  width: BUTTON_SIZE,
+                  height: BUTTON_SIZE,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'transparent',
+                  border: `1px solid ${theme.breadcrumbs.separatorColor}`,
+                  borderRadius: 6,
+                  color: theme.breadcrumbs.textColor,
+                  cursor: 'pointer',
+                  padding: 0,
+                  outline: 'none',
+                }}
+              >
+                <svg width={16} height={16} viewBox="0 0 16 16">
+                  <path d={path} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Distribute group */}
+      {onDistribute && (
+        <>
+          <Divider theme={theme} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: BUTTON_GAP }}>
+            {(
+              [
+                { axis: 'horizontal' as const, label: 'Distribute Horizontally', path: 'M 3 3 L 3 13 M 13 3 L 13 13 M 7 6 L 7 10 M 9 6 L 9 10' },
+                { axis: 'vertical'   as const, label: 'Distribute Vertically',   path: 'M 3 3 L 13 3 M 3 13 L 13 13 M 6 7 L 10 7 M 6 9 L 10 9' },
+              ]
+            ).map(({ axis, label, path }) => {
+              const disabled = selectedNodes.length < 3
+              return (
+                <button
+                  key={axis}
+                  type="button"
+                  title={label}
+                  disabled={disabled}
+                  onClick={() => !disabled && onDistribute(axis)}
+                  onMouseDown={(e) => e.preventDefault()}
+                  style={{
+                    width: BUTTON_SIZE,
+                    height: BUTTON_SIZE,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'transparent',
+                    border: `1px solid ${theme.breadcrumbs.separatorColor}`,
+                    borderRadius: 6,
+                    color: disabled ? theme.breadcrumbs.separatorColor : theme.breadcrumbs.textColor,
+                    cursor: disabled ? 'not-allowed' : 'pointer',
+                    opacity: disabled ? 0.4 : 1,
+                    padding: 0,
+                    outline: 'none',
+                  }}
+                >
+                  <svg width={16} height={16} viewBox="0 0 16 16">
+                    <path d={path} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              )
+            })}
+          </div>
+        </>
+      )}
 
       {showDelete && (
         <>

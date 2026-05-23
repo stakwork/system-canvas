@@ -47,6 +47,9 @@ export type { MarqueeRect } from './hooks/useMultiSelect.js'
 export { useMultiSelectClipboard } from './hooks/useMultiSelectClipboard.js'
 export { useCommandHistory } from './hooks/useCommandHistory.js'
 export type { CanvasCommand } from './hooks/useCommandHistory.js'
+export { useAlignmentGuides } from './hooks/useAlignmentGuides.js'
+export { AlignmentGuidesLayer } from './components/AlignmentGuidesLayer.js'
+export type { AlignDirection } from './components/NodeToolbar.js'
 
 // Re-export everything from core for convenience
 export * from 'system-canvas'

@@ -5,7 +5,7 @@ import type {
   ViewportState,
   NodeUpdate,
 } from 'system-canvas'
-import { getGroupChildren, screenToCanvas } from 'system-canvas'
+import { getGroupChildren, screenToCanvas, snapToGrid } from 'system-canvas'
 
 /** A single moved node's id and the patch (x/y) to apply to it. */
 export interface NodeDragUpdate {
@@ -73,6 +73,12 @@ interface UseNodeDragOptions {
    * only the grabbed node + its group children.
    */
   selectedIdsRef?: React.RefObject<Set<string>>
+
+  /**
+   * When > 0, node positions are snapped to the nearest multiple of this
+   * value (in canvas units) live during drag. Defaults to 0 (off).
+   */
+  snapGridSize?: number
 }
 
 interface UseNodeDragResult {
@@ -113,7 +119,7 @@ interface DragState {
 const DRAG_THRESHOLD = 3 // px in screen space before we consider it a drag
 
 export function useNodeDrag(options: UseNodeDragOptions): UseNodeDragResult {
-  const { viewport, nodesRef, onCommit, svgRef, canDropNodeOn, onNodeDrop, selectedIdsRef } =
+  const { viewport, nodesRef, onCommit, svgRef, canDropNodeOn, onNodeDrop, selectedIdsRef, snapGridSize = 0 } =
     options
 
   const [dragOverrides, setDragOverrides] = useState<
@@ -212,7 +218,9 @@ export function useNodeDrag(options: UseNodeDragOptions): UseNodeDragResult {
 
     const next = new Map<string, { x: number; y: number }>()
     for (const [id, start] of st.moving) {
-      next.set(id, { x: start.startX + dx, y: start.startY + dy })
+      const sx = snapGridSize > 0 ? snapToGrid(start.startX + dx, snapGridSize) : start.startX + dx
+      const sy = snapGridSize > 0 ? snapToGrid(start.startY + dy, snapGridSize) : start.startY + dy
+      next.set(id, { x: sx, y: sy })
     }
     setDragOverrides(next)
 

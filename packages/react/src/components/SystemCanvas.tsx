@@ -34,7 +34,10 @@ import {
   filterContextMenuItems,
   screenToCanvas,
   snapToLane,
+  alignNodes,
+  distributeNodes,
 } from 'system-canvas'
+import type { AlignmentGuide } from 'system-canvas'
 import { useNavigation } from '../hooks/useNavigation.js'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts.js'
 import { useCanvasInteraction } from '../hooks/useCanvasInteraction.js'
@@ -53,7 +56,8 @@ import { Viewport, type ViewportHandle } from './Viewport.js'
 import { Breadcrumbs } from './Breadcrumbs.js'
 import { AddNodeButton, type AddNodeButtonRenderProps } from './AddNodeButton.js'
 import { LaneHeaders } from './LaneHeaders.js'
-import { NodeToolbar, type NodeToolbarRenderProps } from './NodeToolbar.js'
+import { NodeToolbar, type NodeToolbarRenderProps, type AlignDirection } from './NodeToolbar.js'
+import { useAlignmentGuides } from '../hooks/useAlignmentGuides.js'
 import {
   NodeContextMenuOverlay,
   type NodeContextMenuOverlayState,
@@ -335,6 +339,20 @@ export interface SystemCanvasProps {
    */
   zoomNavigation?: boolean | ZoomNavigationConfig
 
+  // --- Snap & alignment ---
+  /**
+   * Enable snap-to-grid during drag and resize.
+   * `true` = inherit `theme.grid.size`; `number` = explicit grid size in canvas px; falsy = off.
+   */
+  snapGrid?: boolean | number
+  /** Alignment guide detection radius in canvas units. Default 4. */
+  guideThreshold?: number
+  /**
+   * When true and 2+ nodes are selected, inject built-in align/distribute items into the
+   * right-click context menu for the selected group.
+   */
+  alignDistributeMenu?: boolean
+
   // --- History ---
   /** Maximum undo/redo history depth. Defaults to 50. Only active when editable=true. */
   historyDepth?: number
@@ -419,6 +437,9 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
       laneHeaders = 'pinned',
       snapToLanes = false,
       zoomNavigation = false,
+      snapGrid,
+      guideThreshold,
+      alignDistributeMenu,
       historyDepth,
       onUndo,
       onRedo,
@@ -560,6 +581,14 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
       darkTheme
     )
   }, [themeProp, customThemes, currentCanvas.theme?.base, canvas.theme?.base])
+
+  // Snap-to-grid size (canvas units). 0 = off.
+  const snapGridSize =
+    snapGrid === true
+      ? theme.grid.size
+      : typeof snapGrid === 'number'
+        ? snapGrid
+        : 0
 
   // Resolve canvas data (apply theme, categories, defaults)
   const { nodes, edges, nodeMap } = useMemo(() => {
@@ -951,6 +980,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
     dropTargetId,
     onPointerDown: onNodePointerDown,
     cancelDrag,
+    isDragging,
   } = useNodeDrag({
     viewport: viewportStateRef,
     nodesRef,
@@ -959,13 +989,23 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
     canDropNodeOn,
     onNodeDrop: handleNodeDrop,
     selectedIdsRef,
+    snapGridSize,
   })
 
   const { resizeOverrides, onHandlePointerDown: onResizeHandlePointerDown } =
     useNodeResize({
       viewport: viewportStateRef,
       onCommit: commitResize,
+      snapGridSize,
     })
+
+  // Alignment guides — live during drag, empty at rest.
+  const alignmentGuides: AlignmentGuide[] = useAlignmentGuides({
+    dragOverrides,
+    nodesRef,
+    isDragging,
+    threshold: guideThreshold ?? 4,
+  })
 
   // Selected node with live drag/resize overrides applied — used to position
   // the floating single-node toolbar and resize handles.
@@ -1142,6 +1182,30 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
     setEditingEdgeId(edge.id)
   }, [])
 
+  // Align / distribute callbacks — used by the multi-select toolbar and
+  // (optionally) injected into the right-click context menu.
+  const handleAlign = useCallback(
+    (direction: AlignDirection) => {
+      const selectedNodes = Array.from(selectedIds)
+        .map((id) => nodesRef.current.find((n) => n.id === id))
+        .filter((n): n is ResolvedNode => n != null)
+      const updates = alignNodes(selectedNodes, direction)
+      if (updates.length > 0) wrappedOnNodesUpdate(updates, currentCanvasRef)
+    },
+    [selectedIds, nodesRef, wrappedOnNodesUpdate, currentCanvasRef]
+  )
+
+  const handleDistribute = useCallback(
+    (axis: 'horizontal' | 'vertical') => {
+      const selectedNodes = Array.from(selectedIds)
+        .map((id) => nodesRef.current.find((n) => n.id === id))
+        .filter((n): n is ResolvedNode => n != null)
+      const updates = distributeNodes(selectedNodes, axis)
+      if (updates.length > 0) wrappedOnNodesUpdate(updates, currentCanvasRef)
+    },
+    [selectedIds, nodesRef, wrappedOnNodesUpdate, currentCanvasRef]
+  )
+
   // Declarative node context menu state. `null` = closed; non-null is the
   // open menu's data (filtered items, target node, screen position, the
   // canvas ref the node lives on). Lives here rather than inside
@@ -1169,13 +1233,41 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
   const handleContextMenu = useCallback(
     (event: ContextMenuEvent) => {
       onContextMenu?.(event)
-      if (!nodeContextMenu) return
+      if (!nodeContextMenu && !alignDistributeMenu) return
       if (event.type !== 'node') return
       const node = event.target as CanvasNode | undefined
       if (!node) return
-      const matched = filterContextMenuItems(nodeContextMenu.items, node, {
-        canvasRef: currentCanvasRef ?? null,
-      })
+
+      const matchCtx = { canvasRef: currentCanvasRef ?? null }
+      const matched = nodeContextMenu
+        ? filterContextMenuItems(nodeContextMenu.items, node, matchCtx)
+        : []
+
+      // Inject built-in align/distribute items when the right-clicked node
+      // is part of the current multi-selection (2+ nodes).
+      if (alignDistributeMenu && selectedIds.size >= 2 && selectedIds.has(node.id)) {
+        const canDistribute = selectedIds.size >= 3
+        const builtins = [
+          { id: '__sys_align_left__',    label: 'Align Left' },
+          { id: '__sys_align_right__',   label: 'Align Right' },
+          { id: '__sys_align_top__',     label: 'Align Top' },
+          { id: '__sys_align_bottom__',  label: 'Align Bottom' },
+          { id: '__sys_align_centerH__', label: 'Align Center Horizontal' },
+          { id: '__sys_align_centerV__', label: 'Align Center Vertical' },
+          {
+            id: '__sys_distribute_h__',
+            label: 'Distribute Horizontally',
+            disabled: canDistribute ? undefined : () => !canDistribute,
+          },
+          {
+            id: '__sys_distribute_v__',
+            label: 'Distribute Vertically',
+            disabled: canDistribute ? undefined : () => !canDistribute,
+          },
+        ]
+        matched.push(...builtins)
+      }
+
       if (matched.length === 0) {
         // No items applied to this node — close any stale menu and let
         // the right-click be a no-op (the browser default is already
@@ -1190,8 +1282,28 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
         canvasRef: currentCanvasRef ?? null,
       })
     },
-    [onContextMenu, nodeContextMenu, currentCanvasRef]
+    [onContextMenu, nodeContextMenu, currentCanvasRef, alignDistributeMenu, selectedIds]
   )
+
+  // Effective context menu config — wraps the consumer's config (if any) and
+  // intercepts built-in align/distribute IDs before delegating to the consumer.
+  const effectiveNodeContextMenu = useMemo(() => {
+    if (!nodeContextMenu && !alignDistributeMenu) return null
+    const baseItems = nodeContextMenu?.items ?? []
+    const wrappedOnSelect: NodeContextMenuConfig['onSelect'] = (itemId, node, ctx) => {
+      // Intercept built-in IDs.
+      if (itemId === '__sys_align_left__')    { handleAlign('left');    return }
+      if (itemId === '__sys_align_right__')   { handleAlign('right');   return }
+      if (itemId === '__sys_align_top__')     { handleAlign('top');     return }
+      if (itemId === '__sys_align_bottom__')  { handleAlign('bottom');  return }
+      if (itemId === '__sys_align_centerH__') { handleAlign('centerH'); return }
+      if (itemId === '__sys_align_centerV__') { handleAlign('centerV'); return }
+      if (itemId === '__sys_distribute_h__')  { handleDistribute('horizontal'); return }
+      if (itemId === '__sys_distribute_v__')  { handleDistribute('vertical');   return }
+      nodeContextMenu?.onSelect(itemId, node, ctx)
+    }
+    return { items: baseItems, onSelect: wrappedOnSelect }
+  }, [nodeContextMenu, alignDistributeMenu, handleAlign, handleDistribute])
 
   // Interaction handlers
   const {
@@ -1437,6 +1549,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
           editable ? onConnectionHandlePointerDown : undefined
         }
         edgeCreateEnabled={editable}
+        alignmentGuides={editable ? alignmentGuides : undefined}
       />
 
       {/* Sticky lane headers overlay (above the viewport SVG) */}
@@ -1496,6 +1609,8 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
             getViewport={getViewportState}
             containerWidth={containerSize.width}
             containerHeight={containerSize.height}
+            onAlign={handleAlign}
+            onDistribute={handleDistribute}
           />
         )
       })()}
@@ -1514,10 +1629,10 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
        * above every other library-managed overlay (toolbar, breadcrumbs,
        * lane headers).
        */}
-      {nodeContextMenu && (
+      {effectiveNodeContextMenu && (
         <NodeContextMenuOverlay
           state={contextMenuState}
-          config={nodeContextMenu}
+          config={effectiveNodeContextMenu}
           theme={theme}
           onClose={() => setContextMenuState(null)}
         />
