@@ -148,6 +148,10 @@ interface ViewportProps {
   edgeCreateEnabled?: boolean
   /** Live alignment guides to render during drag. Rendered in canvas-space above all content. */
   alignmentGuides?: AlignmentGuide[]
+  /** Node ids that should render at low opacity (search/category filter). */
+  dimmedNodeIds?: Set<string>
+  /** Node ids that should render with a highlight ring (search match). */
+  highlightedNodeIds?: Set<string>
 }
 
 export interface ViewportHandle {
@@ -216,6 +220,8 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
       onConnectionHandlePointerDown,
       edgeCreateEnabled,
       alignmentGuides,
+      dimmedNodeIds,
+      highlightedNodeIds,
       autoFit = 'canvas-change',
       canvasRef,
       handoffTransform,
@@ -578,6 +584,8 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
             editingId={editingId}
             canvases={canvases}
             only="groups"
+            dimmedNodeIds={dimmedNodeIds}
+            highlightedNodeIds={highlightedNodeIds}
           />
 
           {/* Edges above groups but below regular nodes — so edges appear
@@ -593,6 +601,7 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
             onContextMenu={onEdgeContextMenu}
             selectedId={selectedEdgeId}
             editingId={editingEdgeId}
+            dimmedNodeIds={dimmedNodeIds}
           />
 
           {/* Non-group nodes on top (+ resize handles) */}
@@ -609,6 +618,8 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
             onResizeHandlePointerDown={onResizeHandlePointerDown}
             canvases={canvases}
             only="non-groups"
+            dimmedNodeIds={dimmedNodeIds}
+            highlightedNodeIds={highlightedNodeIds}
           />
 
           {/* Target highlight (halo) for the currently-hovered drop target

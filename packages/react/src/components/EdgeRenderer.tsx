@@ -23,6 +23,8 @@ interface EdgeRendererProps {
   selectedId?: string | null
   /** Id of the edge whose label is currently being edited (label is hidden) */
   editingId?: string | null
+  /** Node ids that are dimmed (search/category filter). Edges connected to dimmed nodes render as dotted lines. */
+  dimmedNodeIds?: Set<string>
 }
 
 /**
@@ -39,6 +41,7 @@ export function EdgeRenderer({
   onContextMenu,
   selectedId,
   editingId,
+  dimmedNodeIds,
 }: EdgeRendererProps) {
   return (
     <>
@@ -107,6 +110,9 @@ export function EdgeRenderer({
         const fromEnd = edge.fromEnd ?? 'none'
         const arrowId = 'system-canvas-arrowhead'
 
+        const isEdgeDimmed =
+          (dimmedNodeIds?.has(edge.fromNode) || dimmedNodeIds?.has(edge.toNode)) ?? false
+
         return (
           <g
             key={edge.id}
@@ -130,6 +136,8 @@ export function EdgeRenderer({
               fill="none"
               stroke={edgeColor}
               strokeWidth={strokeWidth}
+              strokeDasharray={isEdgeDimmed ? '4 4' : undefined}
+              strokeOpacity={isEdgeDimmed ? 0.3 : 1}
               markerEnd={toEnd === 'arrow' ? `url(#${arrowId})` : undefined}
               markerStart={fromEnd === 'arrow' ? `url(#${arrowId})` : undefined}
             />

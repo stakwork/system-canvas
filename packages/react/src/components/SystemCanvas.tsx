@@ -36,6 +36,7 @@ import {
   snapToLane,
   alignNodes,
   distributeNodes,
+  computeNodeFilter,
 } from 'system-canvas'
 import type { AlignmentGuide } from 'system-canvas'
 import { useNavigation } from '../hooks/useNavigation.js'
@@ -62,6 +63,7 @@ import {
   NodeContextMenuOverlay,
   type NodeContextMenuOverlayState,
 } from './NodeContextMenuOverlay.js'
+import { SearchOverlay } from './SearchOverlay.js'
 
 export interface SystemCanvasProps {
   /** Canvas data to render */
@@ -676,6 +678,11 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
   const [editingEdgeId, setEditingEdgeId] = useState<string | null>(null)
 
+  // Search + category filter state
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [hiddenCategories, setHiddenCategories] = useState<Set<string>>(new Set())
+
   // Proxy ref for the SVG element — declared early so both useMultiSelect,
   // useNodeDrag, and useEdgeCreate can all share it. The `.current` assignment
   // runs every render further below; hooks read it lazily at gesture time.
@@ -761,14 +768,35 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
     onEndBatch: endBatch,
   })
 
-  // Clear selection/editing when navigating between canvases
+  // Clear selection/editing when navigating between canvases; also reset search
   useEffect(() => {
     clearSelection()
     setEditingId(null)
     setSelectedEdgeId(null)
     setEditingEdgeId(null)
+    setSearchOpen(false)
+    setSearchQuery('')
+    setHiddenCategories(new Set())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCanvasRef])
+
+  // Cmd+F / Ctrl+F global listener — opens search in both editable and read-only modes
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+        e.preventDefault()
+        setSearchOpen((prev) => {
+          if (prev) {
+            setSearchQuery('')
+            setHiddenCategories(new Set())
+          }
+          return !prev
+        })
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   // Unified selection-change emission. Watches both id slots and emits
   // a single `CanvasSelection | null` to the consumer whenever the
@@ -886,6 +914,26 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
     () => viewportStateRef.current ?? { x: 0, y: 0, zoom: 1 },
     []
   )
+
+  // Derived search filter
+  const { matchingIds, dimmedIds } = useMemo(
+    () => computeNodeFilter(nodes, searchOpen ? searchQuery : '', hiddenCategories),
+    [nodes, searchQuery, searchOpen, hiddenCategories]
+  )
+
+  // Pan camera to the first matching node
+  const panToFirstMatch = useCallback(() => {
+    if (matchingIds.size === 0) return
+    const firstId = matchingIds.values().next().value as string
+    const node = nodesRef.current.find((n) => n.id === firstId)
+    const handle = viewportHandleRef.current
+    if (!node || !handle) return
+    const currentZoom = viewportStateRef.current.zoom
+    handle.zoomToNode(node, undefined, {
+      targetZoom: Math.max(currentZoom, 1.5),
+      durationMs: 400,
+    })
+  }, [matchingIds])
 
   // Per-node commit. Used by resize (which only ever moves a single
   // node) and as the fallback path in `commitDragBatch` when the
@@ -1550,6 +1598,8 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
         }
         edgeCreateEnabled={editable}
         alignmentGuides={editable ? alignmentGuides : undefined}
+        dimmedNodeIds={dimmedIds}
+        highlightedNodeIds={matchingIds}
       />
 
       {/* Sticky lane headers overlay (above the viewport SVG) */}
@@ -1637,6 +1687,30 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
           onClose={() => setContextMenuState(null)}
         />
       )}
+
+      {/* Search + category filter overlay — rendered last so it sits above all other overlays */}
+      <SearchOverlay
+        open={searchOpen}
+        query={searchQuery}
+        onQueryChange={setSearchQuery}
+        theme={theme}
+        hiddenCategories={hiddenCategories}
+        onToggleCategory={(cat) =>
+          setHiddenCategories((prev) => {
+            const next = new Set(prev)
+            next.has(cat) ? next.delete(cat) : next.add(cat)
+            return next
+          })
+        }
+        matchCount={matchingIds.size}
+        totalCount={nodes.length}
+        onClose={() => {
+          setSearchOpen(false)
+          setSearchQuery('')
+          setHiddenCategories(new Set())
+        }}
+        onPanToMatch={panToFirstMatch}
+      />
     </div>
   )
   }

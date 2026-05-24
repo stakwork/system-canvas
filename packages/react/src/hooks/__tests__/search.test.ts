@@ -8,7 +8,6 @@ import type { CanvasNode } from 'system-canvas'
 
 function node(overrides: Partial<CanvasNode> & { id: string }): CanvasNode {
   return {
-    id: overrides.id,
     type: 'text',
     x: 0,
     y: 0,

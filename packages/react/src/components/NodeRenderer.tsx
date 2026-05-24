@@ -42,6 +42,10 @@ interface NodeRendererProps {
    * Callers can use this to interleave edges between groups and other nodes.
    */
   only?: 'groups' | 'non-groups'
+  /** Nodes that should render at low opacity (search/category filter). */
+  dimmedNodeIds?: Set<string>
+  /** Nodes that should render with a highlight ring (search match). */
+  highlightedNodeIds?: Set<string>
 }
 
 /**
@@ -69,6 +73,8 @@ export function NodeRenderer({
   onResizeHandlePointerDown,
   canvases,
   only,
+  dimmedNodeIds,
+  highlightedNodeIds,
 }: NodeRendererProps) {
   const groups = nodes.filter((n) => n.type === 'group')
   const others = nodes.filter((n) => n.type !== 'group')
@@ -117,12 +123,54 @@ export function NodeRenderer({
   return (
     <>
       {only !== 'non-groups' &&
-        groups.map((node) => <GroupNode key={node.id} {...common(node)} />)}
+        groups.map((node) => {
+          const isDimmed = dimmedNodeIds?.has(node.id) ?? false
+          const isHighlighted = highlightedNodeIds?.has(node.id) ?? false
+          return (
+            <g key={node.id} opacity={isDimmed ? 0.15 : 1}>
+              {isHighlighted && (
+                <rect
+                  x={node.x - 4}
+                  y={node.y - 4}
+                  width={node.width + 8}
+                  height={node.height + 8}
+                  rx={6}
+                  fill="none"
+                  stroke={theme.node.labelColor}
+                  strokeWidth={2}
+                  opacity={0.6}
+                  pointerEvents="none"
+                />
+              )}
+              <GroupNode {...common(node)} />
+            </g>
+          )
+        })}
 
       {only !== 'groups' &&
         others.map((node) => {
           const Component = getNodeComponent(node.type)
-          return <Component key={node.id} {...common(node)} />
+          const isDimmed = dimmedNodeIds?.has(node.id) ?? false
+          const isHighlighted = highlightedNodeIds?.has(node.id) ?? false
+          return (
+            <g key={node.id} opacity={isDimmed ? 0.15 : 1}>
+              {isHighlighted && (
+                <rect
+                  x={node.x - 4}
+                  y={node.y - 4}
+                  width={node.width + 8}
+                  height={node.height + 8}
+                  rx={6}
+                  fill="none"
+                  stroke={theme.node.labelColor}
+                  strokeWidth={2}
+                  opacity={0.6}
+                  pointerEvents="none"
+                />
+              )}
+              <Component {...common(node)} />
+            </g>
+          )
         })}
 
       {renderResizeHandles && (
