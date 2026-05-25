@@ -9,6 +9,7 @@ import {
   computeEdgePath,
   computeEdgeMidpoint,
   resolveColor,
+  measureTextWidth,
 } from 'system-canvas'
 
 interface EdgeRendererProps {
@@ -145,27 +146,40 @@ export function EdgeRenderer({
             {/* Edge label (hidden while editing) */}
             {edge.label && !isEditing && (
               <>
-                {/* Label background for readability */}
-                <rect
-                  x={midpoint.x - edge.label.length * 3 - 4}
-                  y={midpoint.y - theme.edge.labelFontSize - 2}
-                  width={edge.label.length * 6 + 8}
-                  height={theme.edge.labelFontSize + 6}
-                  rx={3}
-                  fill={theme.background}
-                  opacity={0.8}
-                />
-                <text
-                  x={midpoint.x}
-                  y={midpoint.y}
-                  fill={isSelected ? theme.node.labelColor : theme.edge.labelColor}
-                  fontSize={theme.edge.labelFontSize}
-                  fontFamily={theme.node.fontFamily}
-                  textAnchor="middle"
-                  pointerEvents="none"
-                >
-                  {edge.label}
-                </text>
+                {/* Label background — fully-rounded pill */}
+                {(() => {
+                  const labelFontSize = theme.edge.labelFontSize
+                  const pillPadX = 8
+                  const pillPadY = 3
+                  const pillH = labelFontSize + pillPadY * 2
+                  const pillW = measureTextWidth(edge.label, labelFontSize) + pillPadX * 2
+                  const pillX = midpoint.x - pillW / 2
+                  const pillY = midpoint.y - pillH / 2 - labelFontSize * 0.35
+                  return (
+                    <>
+                      <rect
+                        x={pillX}
+                        y={pillY}
+                        width={pillW}
+                        height={pillH}
+                        rx={pillH / 2}
+                        fill={theme.background}
+                        opacity={0.85}
+                      />
+                      <text
+                        x={midpoint.x}
+                        y={pillY + pillH / 2 + labelFontSize * 0.35}
+                        fill={isSelected ? theme.node.labelColor : theme.edge.labelColor}
+                        fontSize={labelFontSize}
+                        fontFamily={theme.node.fontFamily}
+                        textAnchor="middle"
+                        pointerEvents="none"
+                      >
+                        {edge.label}
+                      </text>
+                    </>
+                  )
+                })()}
               </>
             )}
           </g>
