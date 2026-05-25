@@ -2,7 +2,12 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "noEmit": true
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "system-canvas": ["../packages/core/src/index.ts"],
+      "system-canvas-react": ["../packages/react/src/index.ts"]
+    }
   },
   "include": ["src"]
 }

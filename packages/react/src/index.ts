@@ -27,6 +27,7 @@ export type { NodeToolbarRenderProps } from './components/NodeToolbar.js'
 export { LanesBackground } from './components/LanesBackground.js'
 export { LaneHeaders } from './components/LaneHeaders.js'
 export { ResizeHandles } from './components/ResizeHandles.js'
+export { RevealsLayer } from './components/RevealsLayer.js'
 
 // Primitives — low-level building blocks used internally by the slot
 // renderer and re-exported for `kind: 'custom'` slot implementations.

@@ -7,8 +7,8 @@
     "build": "vite build"
   },
   "dependencies": {
-    "system-canvas": "^0.1.0",
-    "system-canvas-react": "^0.1.0",
+    "system-canvas": "*",
+    "system-canvas-react": "*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

@@ -37,6 +37,9 @@ export function resolveTheme(
     nodeActions: partial.nodeActions ?? base.nodeActions,
     showToolbarDelete: partial.showToolbarDelete ?? base.showToolbarDelete,
     toolbarAlign: partial.toolbarAlign ?? base.toolbarAlign,
+    reveals: partial.reveals
+      ? { ...(base.reveals ?? {}), ...partial.reveals }
+      : base.reveals,
   }
 }
 

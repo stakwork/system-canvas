@@ -29,6 +29,7 @@ import { ConnectionHandles } from './ConnectionHandles.js'
 import { PendingEdgeRenderer } from './PendingEdgeRenderer.js'
 import { LanesBackground } from './LanesBackground.js'
 import { AlignmentGuidesLayer } from './AlignmentGuidesLayer.js'
+import { RevealsLayer } from './RevealsLayer.js'
 import type { ResizeCorner, ResizeOverride } from '../hooks/useNodeResize.js'
 import type { PendingEdgeState } from '../hooks/useEdgeCreate.js'
 import type { AlignmentGuide } from 'system-canvas'
@@ -508,6 +509,17 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
     const dropTargetNode =
       dropTargetId ? renderNodeMap.get(dropTargetId) ?? null : null
 
+    // Stable getter for the current viewport — passed to children that
+    // need to poll viewport on every animation frame (RevealsLayer's
+    // zoom-gated opacity ticker). Mirrors the same pattern used by
+    // NodeToolbar / LaneHeaders, but kept local to Viewport so the
+    // RevealsLayer can sit inside the transformable <g> without needing
+    // the top-level `getViewportState` callback in SystemCanvas.
+    const getViewport = useCallback(
+      (): ViewportState => viewport.current ?? { x: 0, y: 0, zoom: 1 },
+      [viewport]
+    )
+
     // Compute edge editor anchor (midpoint of the edge being edited)
     const editingEdge = editingEdgeId
       ? edges.find((e) => e.id === editingEdgeId) ?? null
@@ -620,6 +632,19 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
             only="non-groups"
             dimmedNodeIds={dimmedNodeIds}
             highlightedNodeIds={highlightedNodeIds}
+          />
+
+          {/* Category reveals — zoom-gated detail panels attached to
+              individual nodes. Sits above nodes/edges but below selection
+              halos, editors, and resize handles so interactive UI always
+              wins for hit-testing. The layer itself sets pointerEvents
+              "none" globally; consumers needing clickable reveals can
+              opt back in inside a `kind: 'custom'` renderer. */}
+          <RevealsLayer
+            nodes={renderNodes}
+            theme={theme}
+            canvases={canvases}
+            getViewport={getViewport}
           />
 
           {/* Target highlight (halo) for the currently-hovered drop target

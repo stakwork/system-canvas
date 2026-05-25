@@ -173,6 +173,14 @@ export interface CategoryDefinition {
    * new nodes never share nested object/array references.
    */
   defaultCustomData?: Record<string, unknown>
+
+  /**
+   * Zoom-gated detail panels rendered outside the node bounding box (one
+   * per side). See `CategoryReveals` / `RevealSpec`. The category declares
+   * the layout, threshold, and structure; per-node values flow in via
+   * `NodeAccessor` accessors against `node.customData`.
+   */
+  reveals?: CategoryReveals
 }
 
 // ---------------------------------------------------------------------------
@@ -580,6 +588,226 @@ export interface RollupResult {
 }
 
 // ---------------------------------------------------------------------------
+// Category reveals — zoom-gated detail panels attached to a node
+//
+// A reveal is a panel of additional content that sits OUTSIDE the node's
+// bounding box (above, below, left, or right) and fades in once the
+// viewport zoom passes a per-reveal threshold. Reveals are declared on a
+// category — every node in the category gets the same layout/threshold;
+// per-node values flow in via `NodeAccessor` accessors against
+// `node.customData`.
+//
+// Reveals are deliberately not the same surface as slots:
+//   - Slots live INSIDE the node bbox; reveals live OUTSIDE.
+//   - Slots are always visible; reveals fade in past a zoom threshold.
+//   - Slots influence body reflow; reveals never affect the node itself.
+// ---------------------------------------------------------------------------
+
+/** Side of the node a reveal is anchored to. */
+export type RevealPlacement = 'above' | 'below' | 'left' | 'right'
+
+/** Map of reveal placements to specs. At most one reveal per side. */
+export type CategoryReveals = Partial<Record<RevealPlacement, RevealSpec>>
+
+/** Discriminated union of every reveal kind the library renders directly. */
+export type RevealSpec =
+  | TextReveal
+  | ListReveal
+  | MetricsReveal
+  | CustomReveal
+
+/** Common fields every reveal supports. */
+export interface BaseReveal {
+  /**
+   * Zoom level (d3-zoom `k`) at which this reveal is fully opaque.
+   * Below `threshold - fadeWindow` the reveal is fully transparent and
+   * skipped entirely (zero render cost). Defaults to
+   * `theme.reveals?.defaultThreshold` if unspecified, else `1.6`.
+   */
+  threshold?: number
+  /**
+   * Width of the fade-in window in zoom units. The reveal starts to
+   * appear at `threshold - fadeWindow` and reaches full opacity at
+   * `threshold`. Defaults to `theme.reveals?.defaultFadeWindow` else
+   * `0.4`.
+   */
+  fadeWindow?: number
+  /** Gap in px between the node edge and the reveal panel. Default 12. */
+  offset?: number
+  /**
+   * Panel dimensions in canvas-space px. When omitted, the library
+   * derives sensible defaults from `kind` and the node's size.
+   */
+  width?: number
+  height?: number
+  /**
+   * Cross-axis alignment relative to the node.
+   *   - For `above` / `below`: alignment is horizontal — `start` =
+   *     align panel left edge to node left edge, `center` = center
+   *     the panel under the node, `end` = align right edges.
+   *   - For `left` / `right`: alignment is vertical along the same axes.
+   * Default `'center'`.
+   */
+  align?: 'start' | 'center' | 'end'
+  /**
+   * Per-node visibility gate. Skip rendering the reveal entirely when
+   * this returns false. Lets a category declare a reveal that only
+   * applies to some of its nodes without splitting into two categories.
+   * Default `true` (always rendered, subject to content-empty check).
+   */
+  visible?: NodeAccessor<boolean>
+}
+
+/**
+ * Headline + body text reveal. Both fields wrap to `width` and support
+ * `\n` for paragraph breaks. Either field may resolve to null/undefined
+ * to be skipped; if both are empty the reveal as a whole is skipped.
+ */
+export interface TextReveal extends BaseReveal {
+  kind: 'text'
+  headline?: NodeAccessor<string | null | undefined>
+  body?: NodeAccessor<string | null | undefined>
+  /**
+   * Optional leading icon name (looked up in `theme.icons`, falling
+   * back to the library's built-in set). Rendered to the left of the
+   * headline.
+   */
+  icon?: NodeAccessor<string | null | undefined>
+  iconColor?: NodeAccessor<string>
+  headlineColor?: NodeAccessor<string>
+  bodyColor?: NodeAccessor<string>
+  /** Horizontal alignment of the text content. Default 'start'. */
+  textAlign?: 'start' | 'center' | 'end'
+}
+
+/**
+ * Per-row spec for `ListReveal`. Every field is optional except
+ * `value` — a row with no value resolves to nothing and is dropped
+ * from the layout (siblings reflow to fill the space).
+ *
+ * The library renders each row as: `[icon] [label] [value]` on a
+ * single baseline. `label` is muted; `value` is full-weight.
+ */
+export interface RevealListRow {
+  /** Optional row icon — same lookup as `TextReveal.icon`. */
+  icon?: NodeAccessor<string | null | undefined>
+  iconColor?: NodeAccessor<string>
+  /** Muted left-side label (e.g. "Pubkey"). */
+  label?: NodeAccessor<string | null | undefined>
+  /** Primary right-side value. The row is dropped when this is null/undefined. */
+  value: NodeAccessor<string | number | null | undefined>
+  /** Render the value in a monospaced font. Useful for hex / hashes. */
+  mono?: boolean
+  /** Optional per-row value color override. */
+  valueColor?: NodeAccessor<string>
+}
+
+/**
+ * A stack of `label / value` rows with optional leading icons.
+ * Designed for "key: value" detail dumps (pubkey, issuer, realm, ...).
+ */
+export interface ListReveal extends BaseReveal {
+  kind: 'list'
+  rows: RevealListRow[]
+  /**
+   * Vertical line height per row in px. Defaults to
+   * `theme.node.fontSize * 1.6` so rows breathe but stay compact.
+   */
+  rowHeight?: number
+  /** Override font size for all rows (px). Defaults to `theme.node.fontSize`. */
+  fontSize?: number
+  /**
+   * When the label column is consistent across rows, the library
+   * aligns values to a single column position. Set to `false` to pack
+   * each row independently (label and value sit next to each other,
+   * no column alignment). Default `true`.
+   */
+  alignValues?: boolean
+  /**
+   * Font weight for value text across all rows. Defaults to 600 (semi-
+   * bold) — set to 400 / 500 for a quieter "key: value" dump where
+   * the label and value should read at the same weight.
+   */
+  valueWeight?: number
+  /**
+   * Font weight for label text across all rows. Defaults to 500. Lower
+   * to 400 to flatten the visual contrast between label and value
+   * further (paired with a low `valueWeight`).
+   */
+  labelWeight?: number
+}
+
+/** Per-block spec for `MetricsReveal`. */
+export interface RevealMetricBlock {
+  /** Muted caption above the value (e.g. "RPS", "p99"). */
+  label?: NodeAccessor<string | null | undefined>
+  /** Primary figure. Block is dropped when this is null/undefined. */
+  value: NodeAccessor<string | number | null | undefined>
+  /** Optional delta line below the value (e.g. "+12%"). */
+  delta?: NodeAccessor<string | null | undefined>
+  /** Color for the value text. Defaults to `theme.node.labelColor`. */
+  color?: NodeAccessor<string>
+}
+
+/** A row of 1-4 stat blocks rendered side by side. */
+export interface MetricsReveal extends BaseReveal {
+  kind: 'metrics'
+  blocks: RevealMetricBlock[]
+}
+
+/**
+ * Escape hatch — consumer returns arbitrary SVG given the region rect,
+ * current zoom, and computed opacity. Useful for charts, sparklines,
+ * or any reveal the built-in kinds can't express.
+ */
+export interface CustomReveal extends BaseReveal {
+  kind: 'custom'
+  render: (ctx: RevealContext) => unknown
+}
+
+/**
+ * Context passed to reveal accessors and `custom` renderers. Mirrors
+ * `SlotContext` but adds zoom-aware fields: `zoom` is the current
+ * d3-zoom `k`, `opacity` is the library's computed fade-in opacity
+ * (0..1) for THIS reveal. Custom renderers can either use `opacity`
+ * directly (apply it to a wrapping `<g opacity>`) or run their own
+ * opacity math off `zoom` for non-linear curves.
+ */
+export interface RevealContext {
+  node: ResolvedNode
+  theme: CanvasTheme
+  /** Region rect this reveal is rendering into (canvas-space). */
+  region: SlotRect
+  /** Which side of the node this reveal is anchored to. */
+  placement: RevealPlacement
+  /** Current viewport zoom `k`. */
+  zoom: number
+  /** Computed fade-in opacity (0..1) for this reveal at the current zoom. */
+  opacity: number
+  /** Mirrors `SlotContext.getSubCanvas`. */
+  getSubCanvas: (ref: string) => CanvasData | undefined
+  canvases?: Record<string, CanvasData>
+  /** Mirrors `SlotContext.rollup`. */
+  rollup: (predicate: (n: CanvasNode) => boolean) => RollupResult
+}
+
+/** Theme-level defaults shared by every reveal that doesn't override. */
+export interface RevealsTheme {
+  /** Default zoom `k` at which reveals reach full opacity. Default 1.6. */
+  defaultThreshold?: number
+  /** Default fade-in window in zoom units. Default 0.4. */
+  defaultFadeWindow?: number
+  /** Default gap between node edge and reveal panel (px). Default 12. */
+  defaultOffset?: number
+  /** Background fill for `text` / `list` / `metrics` panels. Default 'transparent'. */
+  panelFill?: string
+  /** Optional border color. Default undefined (no border). */
+  panelStroke?: string
+  /** Border-radius for the panel. Default 6. */
+  panelCornerRadius?: number
+}
+
+// ---------------------------------------------------------------------------
 // Editable fields — per-category form schema for the inline editor
 // ---------------------------------------------------------------------------
 
@@ -865,6 +1093,12 @@ export interface CanvasTheme {
    * top of the viewport, and is clamped to the viewport bounds in all modes.
    */
   toolbarAlign?: 'left' | 'center' | 'right'
+  /**
+   * Theme-level defaults for category reveals (zoom-gated detail panels
+   * attached to a node — see `CategoryDefinition.reveals`). Individual
+   * reveal specs override these fields when set.
+   */
+  reveals?: RevealsTheme
 }
 
 // ---------------------------------------------------------------------------

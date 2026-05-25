@@ -427,6 +427,13 @@ export const gatewayTheme: CanvasTheme = resolveTheme(
 
       // ─── gateway ─────────────────────────────────────────────────
       // Singleton hub. Big purple card sitting in the middle.
+      //
+      // At fit-zoom the card reads as the central "Agent Gateway" hub
+      // with the swarm total in the footer. Zooming in past `threshold`
+      // fades in a 4-row trust-context panel BELOW the node so the
+      // operator can verify who's actually issuing tokens to this
+      // mothership without leaving the canvas. The panel is a category
+      // reveal — declared here, populated per-node via `customData`.
       gateway: {
         defaultWidth: 220,
         defaultHeight: 100,
@@ -447,6 +454,76 @@ export const gatewayTheme: CanvasTheme = resolveTheme(
             fontSize: 11,
             align: 'center',
             color: '#9ca3af',
+          },
+        },
+        // Zoom in past the threshold and a "Provenance" panel fades in
+        // below — a 1:1 mirror of the AuthorizedBy card on the live
+        // RunDetail page (gateway/internal/adminapi/ui src/pages/
+        // RunDetail.tsx#AuthorizedBy). Same shape, same labels, same
+        // formatting, same conditional rendering for issuer + realm +
+        // grace. `customData` here uses the real wire field names
+        // (snake_case, matching `TrustOrg` in src/api/types.ts) so the
+        // demo doubles as a copy-paste template for the live UI.
+        reveals: {
+          below: {
+            kind: 'list',
+            // Fully opaque at zoom 1.6; starts fading in at 1.2.
+            threshold: 1.6,
+            fadeWindow: 0.4,
+            offset: 14,
+            // Pin the panel's left edge to the node's left edge and
+            // match the node's width so the panel reads as a
+            // continuation of the card rather than a floating tooltip.
+            width: 220,
+            align: 'start',
+            alignValues: true,
+            // Reference details, not headline figures — render label
+            // and value at normal weight so the panel reads as a flat
+            // key/value dump.
+            valueWeight: 400,
+            labelWeight: 400,
+            rows: [
+              {
+                icon: 'shield',
+                label: 'Org',
+                value: (ctx) =>
+                  (ctx.node.customData?.org_id as string) ?? null,
+              },
+              {
+                label: 'Pubkey',
+                // Mirror RunDetail.tsx's `fmtKey`: keep first 8 and
+                // last 6 characters of the key, joined by "…", but
+                // only when the original is longer than 16 chars
+                // (shorter keys render verbatim). The lib clamps to
+                // panel width as a safety net regardless.
+                value: (ctx) => {
+                  const pk = ctx.node.customData?.pubkey as string | undefined
+                  if (!pk) return null
+                  return pk.length > 16
+                    ? `${pk.slice(0, 8)}…${pk.slice(-6)}`
+                    : pk
+                },
+                mono: true,
+              },
+              {
+                // Conditional on the live card: only rendered when
+                // issuer_url is truthy. Returning null from the
+                // accessor drops the row and reflows siblings.
+                label: 'Issuer',
+                value: (ctx) =>
+                  (ctx.node.customData?.issuer_url as string) || null,
+              },
+              {
+                // The realm row on the live card comes from a sibling
+                // endpoint (`GET /trust/status` → `realm_id`), not
+                // from `TrustOrg` — we stash it under `realm_id` on
+                // `customData` to keep the naming honest.
+                label: 'Realm',
+                value: (ctx) =>
+                  (ctx.node.customData?.realm_id as string) || null,
+                mono: true,
+              }
+            ],
           },
         },
       },
@@ -623,6 +700,24 @@ function buildGatewayCanvas(): CanvasData {
   })
 
   // Gateway singleton.
+  //
+  // `customData` here feeds two things: the existing footer slot reads
+  // `totalCost`, and the zoom-gated reveal panel reads the trust-
+  // registry fields. Field names mirror the live wire shape exactly —
+  // see `TrustOrg` in gateway/internal/adminapi/ui src/api/types.ts —
+  // so the demo doubles as a copy-paste template for the live UI:
+  //
+  //   org_id                  — registry key, rendered next to "Org"
+  //   pubkey                  — ed25519 public key, fmtKey-truncated
+  //   issuer_url              — JWT issuer URL (optional)
+  //   grace_pubkeys           — keys still accepted during rotation
+  //   grace_until             — grace-window expiry timestamp
+  //
+  // `realm_id` belongs to the swarm (GET /trust/status), not to the
+  // TrustOrg record itself — but the live AuthorizedBy card renders it
+  // alongside the trust fields, so we stash it on the same node here.
+  // `revocation_poll_seconds` exists on TrustOrg but the live UI never
+  // displays it, so we omit it here too.
   nodes.push({
     id: 'gateway',
     type: 'text',
@@ -632,7 +727,16 @@ function buildGatewayCanvas(): CanvasData {
     y: 0,
     width: SIZE.gateway.w,
     height: SIZE.gateway.h,
-    customData: { totalCost: swarmTotal },
+    customData: {
+      totalCost: swarmTotal,
+      org_id: 'sphinx-labs',
+      pubkey:
+        '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b',
+      issuer_url: 'https://auth.sphinx.chat',
+      realm_id: 'mothership-prod',
+      grace_pubkeys: ['9f8e7d6c5b4a39281706f5e4d3c2b1a0' /* one rotating key */],
+      grace_until: '2026-06-01T00:00:00Z',
+    },
   })
 
   // Providers column.
