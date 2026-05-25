@@ -94,6 +94,7 @@ export {
   computeEdgePath,
   computeEdgeMidpoint,
   buildParallelEdgeGroups,
+  computeSelfLoopPath,
   computeBoundingBox,
   fitToBounds,
   fitBoundsIntoRect,

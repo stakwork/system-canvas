@@ -1,5 +1,5 @@
 export { computeAnchorPoint, inferSide } from './anchor-points.js'
-export { computeEdgePath, computeEdgeMidpoint, buildParallelEdgeGroups } from './edge-routing.js'
+export { computeEdgePath, computeEdgeMidpoint, buildParallelEdgeGroups, computeSelfLoopPath } from './edge-routing.js'
 export {
   computeBoundingBox,
   fitToBounds,

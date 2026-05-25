@@ -3,6 +3,7 @@ import type {
   ResolvedNode,
   EdgeStyle,
   AnchorPoint,
+  Side,
 } from '../types.js'
 import { computeAnchorPoint, inferSide } from './anchor-points.js'
 
@@ -28,6 +29,29 @@ export function buildParallelEdgeGroups(
 }
 
 /**
+ * Compute a looping arc path for a self-referencing edge (fromNode === toNode).
+ * The loop exits from `exitSide` and re-enters the adjacent clockwise side.
+ * Arc radius scales with the node's larger dimension.
+ */
+export function computeSelfLoopPath(node: ResolvedNode, exitSide: Side = 'top'): string {
+  const r = Math.max(node.width, node.height) * 0.8
+
+  const from = computeAnchorPoint(node, exitSide)
+  const toSide: Side =
+    exitSide === 'top' ? 'right'
+    : exitSide === 'right' ? 'bottom'
+    : exitSide === 'bottom' ? 'left'
+    : 'top'
+  const to = computeAnchorPoint(node, toSide)
+
+  // Control points arc outward from the node proportionally to r
+  const cp1 = controlPointOffset(from, exitSide, r)
+  const cp2 = controlPointOffset(to, toSide, r)
+
+  return `M ${from.x} ${from.y} C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${to.x} ${to.y}`
+}
+
+/**
  * Compute the SVG path `d` attribute for an edge between two nodes.
  */
 export function computeEdgePath(
@@ -38,6 +62,11 @@ export function computeEdgePath(
   parallelIndex = 0,
   parallelTotal = 1
 ): string {
+  // Self-referencing edge: render as a loop arc
+  if (fromNode.id === toNode.id) {
+    return computeSelfLoopPath(fromNode, edge.fromSide ?? 'top')
+  }
+
   // Determine connection sides
   const inferred = inferSide(fromNode, toNode)
   const fromSide = edge.fromSide ?? inferred.fromSide
@@ -163,6 +192,35 @@ export function computeEdgeMidpoint(
   fromNode: ResolvedNode,
   toNode: ResolvedNode
 ): AnchorPoint {
+  // Self-referencing edge: evaluate the loop bezier at t=0.5 (arc tip)
+  if (fromNode.id === toNode.id) {
+    const exitSide: Side = edge.fromSide ?? 'top'
+    const r = Math.max(fromNode.width, fromNode.height) * 0.8
+    const from = computeAnchorPoint(fromNode, exitSide)
+    const toSide: Side =
+      exitSide === 'top' ? 'right'
+      : exitSide === 'right' ? 'bottom'
+      : exitSide === 'bottom' ? 'left'
+      : 'top'
+    const to = computeAnchorPoint(fromNode, toSide)
+    const cp1 = controlPointOffset(from, exitSide, r)
+    const cp2 = controlPointOffset(to, toSide, r)
+
+    const t = 0.5
+    const mt = 1 - t
+    const x =
+      mt * mt * mt * from.x +
+      3 * mt * mt * t * cp1.x +
+      3 * mt * t * t * cp2.x +
+      t * t * t * to.x
+    const y =
+      mt * mt * mt * from.y +
+      3 * mt * mt * t * cp1.y +
+      3 * mt * t * t * cp2.y +
+      t * t * t * to.y
+    return { x, y }
+  }
+
   const inferred = inferSide(fromNode, toNode)
   const fromSide = edge.fromSide ?? inferred.fromSide
   const toSide = edge.toSide ?? inferred.toSide
