@@ -56,6 +56,11 @@ export function EdgeRenderer({
           color. Selected edges already set their path stroke to the
           high-contrast label color, so the arrow follows along. */}
       <defs>
+        <style>{`
+          @keyframes system-canvas-march {
+            to { stroke-dashoffset: -20; }
+          }
+        `}</style>
         <marker
           id="system-canvas-arrowhead"
           markerWidth={theme.edge.arrowSize}
@@ -143,7 +148,8 @@ export function EdgeRenderer({
               fill="none"
               stroke={edgeColor}
               strokeWidth={strokeWidth}
-              strokeDasharray={isEdgeDimmed ? '4 4' : undefined}
+              strokeDasharray={edge.animated ? '6 4' : (isEdgeDimmed ? '4 4' : undefined)}
+              style={edge.animated ? { animation: 'system-canvas-march 0.6s linear infinite' } : undefined}
               strokeOpacity={isEdgeDimmed ? 0.3 : 1}
               markerEnd={toEnd === 'arrow' ? `url(#${arrowId})` : undefined}
               markerStart={fromEnd === 'arrow' ? `url(#${arrowId})` : undefined}
