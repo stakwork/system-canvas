@@ -93,6 +93,7 @@ export {
   inferSide,
   computeEdgePath,
   computeEdgeMidpoint,
+  buildParallelEdgeGroups,
   computeBoundingBox,
   fitToBounds,
   fitBoundsIntoRect,
