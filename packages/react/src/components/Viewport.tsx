@@ -137,6 +137,7 @@ interface ViewportProps {
   onEditorCancel?: () => void
   onEdgeEditorCommit?: (patch: EdgeUpdate) => void
   onEdgeEditorCancel?: () => void
+  onEdgeWaypointUpdate?: (edgeId: string, patch: EdgeUpdate) => void
 
   // Edge creation (editable mode)
   pendingEdge?: PendingEdgeState | null
@@ -217,6 +218,7 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
       onEditorCancel,
       onEdgeEditorCommit,
       onEdgeEditorCancel,
+      onEdgeWaypointUpdate,
       pendingEdge,
       onConnectionHandlePointerDown,
       edgeCreateEnabled,
@@ -617,6 +619,11 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
             editingId={editingEdgeId}
             dimmedNodeIds={dimmedNodeIds}
             parallelGroups={parallelGroups}
+            editable={!!onNodePointerDown}
+            onWaypointCommit={onEdgeWaypointUpdate
+              ? (id, wps) => onEdgeWaypointUpdate(id, { waypoints: wps })
+              : undefined}
+            viewportRef={viewport}
           />
 
           {/* Non-group nodes on top (+ resize handles) */}
