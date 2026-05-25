@@ -19,7 +19,7 @@ import type {
   NodeUpdate,
   EdgeUpdate,
 } from 'system-canvas'
-import { computeEdgeMidpoint, screenToCanvas } from 'system-canvas'
+import { computeEdgeMidpoint, screenToCanvas, buildParallelEdgeGroups } from 'system-canvas'
 import { useViewport } from '../hooks/useViewport.js'
 import { NodeRenderer } from './NodeRenderer.js'
 import { EdgeRenderer } from './EdgeRenderer.js'
@@ -327,6 +327,8 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
       })
     }, [nodes, dragOverrides, resizeOverrides])
 
+    const parallelGroups = useMemo(() => buildParallelEdgeGroups(edges), [edges])
+
     const renderNodeMap = useMemo(() => {
       const hasDrag = dragOverrides && dragOverrides.size > 0
       const hasResize = resizeOverrides && resizeOverrides.size > 0
@@ -614,6 +616,7 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
             selectedId={selectedEdgeId}
             editingId={editingEdgeId}
             dimmedNodeIds={dimmedNodeIds}
+            parallelGroups={parallelGroups}
           />
 
           {/* Non-group nodes on top (+ resize handles) */}

@@ -7,13 +7,36 @@ import type {
 import { computeAnchorPoint, inferSide } from './anchor-points.js'
 
 /**
+ * Build a map from edge id to parallel group info.
+ * Edges sharing the same node pair (A->B and B->A treated as the same pair)
+ * are assigned sequential indices within their group.
+ */
+export function buildParallelEdgeGroups(
+  edges: CanvasEdge[]
+): Map<string, { index: number; total: number }> {
+  const groups = new Map<string, string[]>()
+  for (const edge of edges) {
+    const key = [edge.fromNode, edge.toNode].sort().join('|')
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(edge.id)
+  }
+  const result = new Map<string, { index: number; total: number }>()
+  for (const ids of groups.values()) {
+    ids.forEach((id, i) => result.set(id, { index: i, total: ids.length }))
+  }
+  return result
+}
+
+/**
  * Compute the SVG path `d` attribute for an edge between two nodes.
  */
 export function computeEdgePath(
   edge: CanvasEdge,
   fromNode: ResolvedNode,
   toNode: ResolvedNode,
-  style: EdgeStyle = 'bezier'
+  style: EdgeStyle = 'bezier',
+  parallelIndex = 0,
+  parallelTotal = 1
 ): string {
   // Determine connection sides
   const inferred = inferSide(fromNode, toNode)
@@ -32,7 +55,7 @@ export function computeEdgePath(
       return computeOrthogonalPath(from, to, fromSide, toSide)
     case 'bezier':
     default:
-      return computeBezierPath(from, to, fromSide, toSide)
+      return computeBezierPath(from, to, fromSide, toSide, parallelIndex, parallelTotal)
   }
 }
 
@@ -43,19 +66,37 @@ function computeStraightPath(from: AnchorPoint, to: AnchorPoint): string {
 
 /**
  * Cubic bezier curve with control points offset along the connection sides.
- * Uses a tightness factor of 0.75 (matching the Obsidian reference).
+ * Uses a tightness factor of 0.4. When parallelTotal > 1, control points are
+ * shifted laterally (perpendicular to the from->to axis) so parallel edges fan out.
  */
 function computeBezierPath(
   from: AnchorPoint,
   to: AnchorPoint,
   fromSide: string,
-  toSide: string
+  toSide: string,
+  parallelIndex = 0,
+  parallelTotal = 1
 ): string {
   const dist = Math.sqrt((to.x - from.x) ** 2 + (to.y - from.y) ** 2)
   const offset = Math.max(50, dist * 0.4)
 
   const cp1 = controlPointOffset(from, fromSide, offset)
   const cp2 = controlPointOffset(to, toSide, offset)
+
+  if (parallelTotal > 1) {
+    // Lateral shift perpendicular to the from->to direction
+    const lateralShift = (parallelIndex - (parallelTotal - 1) / 2) * 30
+    const dx = to.x - from.x
+    const dy = to.y - from.y
+    const len = Math.sqrt(dx * dx + dy * dy) || 1
+    // Perpendicular unit vector (rotate 90 degrees)
+    const perpX = -dy / len
+    const perpY = dx / len
+    cp1.x += perpX * lateralShift
+    cp1.y += perpY * lateralShift
+    cp2.x += perpX * lateralShift
+    cp2.y += perpY * lateralShift
+  }
 
   return `M ${from.x} ${from.y} C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${to.x} ${to.y}`
 }
