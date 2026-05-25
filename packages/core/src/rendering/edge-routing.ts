@@ -75,6 +75,10 @@ export function computeEdgePath(
   const from = computeAnchorPoint(fromNode, fromSide)
   const to = computeAnchorPoint(toNode, toSide)
 
+  if (edge.waypoints && edge.waypoints.length > 0) {
+    return computeWaypointPath(from, to, fromSide, toSide, edge.waypoints)
+  }
+
   const effectiveStyle = edge.style ?? style
 
   switch (effectiveStyle) {
@@ -163,6 +167,49 @@ function computeOrthogonalPath(
 }
 
 /**
+ * Smooth Catmull-Rom-style cubic bezier path through a sequence of waypoints.
+ * First and last segments use the anchor side tangents; middle segments use
+ * Catmull-Rom implicit control points.
+ */
+function computeWaypointPath(
+  from: AnchorPoint,
+  to: AnchorPoint,
+  fromSide: string,
+  toSide: string,
+  waypoints: { x: number; y: number }[]
+): string {
+  const pts: { x: number; y: number }[] = [from, ...waypoints, to]
+  const tension = 0.4
+  let d = `M ${from.x} ${from.y}`
+
+  for (let i = 1; i < pts.length; i++) {
+    const p0 = pts[i - 2] ?? pts[i - 1]
+    const p1 = pts[i - 1]
+    const p2 = pts[i]
+    const p3 = pts[i + 1] ?? pts[i]
+
+    if (i === 1) {
+      const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y)
+      const offset = Math.max(50, dist * tension)
+      const cp1 = controlPointOffset(p1, fromSide, offset)
+      const cp2 = { x: p2.x - (p3.x - p1.x) * tension, y: p2.y - (p3.y - p1.y) * tension }
+      d += ` C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${p2.x} ${p2.y}`
+    } else if (i === pts.length - 1) {
+      const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y)
+      const offset = Math.max(50, dist * tension)
+      const cp1 = { x: p1.x + (p2.x - p0.x) * tension, y: p1.y + (p2.y - p0.y) * tension }
+      const cp2 = controlPointOffset(p2, toSide, offset)
+      d += ` C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${p2.x} ${p2.y}`
+    } else {
+      const cp1 = { x: p1.x + (p2.x - p0.x) * tension, y: p1.y + (p2.y - p0.y) * tension }
+      const cp2 = { x: p2.x - (p3.x - p1.x) * tension, y: p2.y - (p3.y - p1.y) * tension }
+      d += ` C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${p2.x} ${p2.y}`
+    }
+  }
+  return d
+}
+
+/**
  * Offset a point along the direction of a side for bezier control points.
  */
 function controlPointOffset(
@@ -219,6 +266,11 @@ export function computeEdgeMidpoint(
       3 * mt * t * t * cp2.y +
       t * t * t * to.y
     return { x, y }
+  }
+
+  if (edge.waypoints && edge.waypoints.length > 0) {
+    const mid = Math.floor(edge.waypoints.length / 2)
+    return edge.waypoints[mid]
   }
 
   const inferred = inferSide(fromNode, toNode)
