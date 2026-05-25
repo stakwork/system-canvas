@@ -80,6 +80,17 @@ export interface CanvasEdge {
    * a magnitude (cost, traffic, etc).
    */
   strokeWidth?: number
+  /**
+   * Ordered list of intermediate control points for manual edge routing.
+   * When present, the edge routes through these points instead of
+   * auto-computing from node anchors alone.
+   */
+  waypoints?: { x: number; y: number }[]
+  /**
+   * When true, the edge renders with a marching-ants animation to indicate
+   * live data flow or in-progress state.
+   */
+  animated?: boolean
 }
 
 /**
