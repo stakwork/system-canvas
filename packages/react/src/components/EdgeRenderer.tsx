@@ -26,6 +26,8 @@ interface EdgeRendererProps {
   editingId?: string | null
   /** Node ids that are dimmed (search/category filter). Edges connected to dimmed nodes render as dotted lines. */
   dimmedNodeIds?: Set<string>
+  /** Parallel group info per edge id for auto-offsetting overlapping edges. */
+  parallelGroups?: Map<string, { index: number; total: number }>
 }
 
 /**
@@ -43,6 +45,7 @@ export function EdgeRenderer({
   selectedId,
   editingId,
   dimmedNodeIds,
+  parallelGroups,
 }: EdgeRendererProps) {
   return (
     <>
@@ -90,7 +93,10 @@ export function EdgeRenderer({
         const toNode = nodeMap.get(edge.toNode)
         if (!fromNode || !toNode) return null
 
-        const pathD = computeEdgePath(edge, fromNode, toNode, defaultEdgeStyle)
+        const parallelInfo = parallelGroups?.get(edge.id)
+        const parallelIndex = parallelInfo?.index ?? 0
+        const parallelTotal = parallelInfo?.total ?? 1
+        const pathD = computeEdgePath(edge, fromNode, toNode, defaultEdgeStyle, parallelIndex, parallelTotal)
         const midpoint = computeEdgeMidpoint(edge, fromNode, toNode)
 
         const isSelected = selectedId === edge.id
