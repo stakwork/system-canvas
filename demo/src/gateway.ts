@@ -584,20 +584,32 @@ interface AgentUserSpend {
   request_count: number
 }
 
-const MOCK_ROWS: AgentUserSpend[] = [
-  // Heavy user with multiple agents
-  { agent_name: 'chat-agent', user_id: 'evanfeenstra', user_name: 'evanfeenstra', total_cost: 0.142391, request_count: 412 },
-  { agent_name: 'code-agent', user_id: 'evanfeenstra', user_name: 'evanfeenstra', total_cost: 0.089123, request_count: 218 },
-  { agent_name: 'web-search', user_id: 'evanfeenstra', user_name: 'evanfeenstra', total_cost: 0.012004, request_count: 63 },
-  { agent_name: 'review-changes', user_id: 'evanfeenstra', user_name: 'evanfeenstra', total_cost: 0.003113, request_count: 31 },
-  // Lighter user
-  { agent_name: 'chat-agent', user_id: 'u_alice', user_name: 'u_alice', total_cost: 0.006469, request_count: 63 },
-  { agent_name: 'code-agent', user_id: 'u_alice', user_name: 'u_alice', total_cost: 0.004003, request_count: 41 },
-  // One-off user
-  { agent_name: 'web-search', user_id: 'u_bob', user_name: 'u_bob', total_cost: 0.003113, request_count: 31 },
-  // Tiny-cost edge case
-  { agent_name: 'code-agent', user_id: 'u_eve', user_name: 'u_eve', total_cost: 0.000088, request_count: 1 },
+// 5 agents per human, exercising the column-wrap layout: 5 → 2 columns
+// (4 + 1), so we see the wrap behavior for every human in the demo.
+const AGENT_TEMPLATES: Array<{ name: string; cost: number; calls: number }> = [
+  { name: 'chat-agent', cost: 0.142391, calls: 412 },
+  { name: 'code-agent', cost: 0.089123, calls: 218 },
+  { name: 'web-search', cost: 0.012004, calls: 63 },
+  { name: 'review-changes', cost: 0.003113, calls: 31 },
+  { name: 'doc-writer', cost: 0.001872, calls: 18 },
 ]
+
+const USERS: Array<{ id: string; name: string; scale: number }> = [
+  { id: 'evanfeenstra', name: 'evanfeenstra', scale: 1.0 },
+  { id: 'u_alice', name: 'u_alice', scale: 0.35 },
+  { id: 'u_bob', name: 'u_bob', scale: 0.12 },
+  { id: 'u_eve', name: 'u_eve', scale: 0.04 },
+]
+
+const MOCK_ROWS: AgentUserSpend[] = USERS.flatMap((u) =>
+  AGENT_TEMPLATES.map((a) => ({
+    agent_name: a.name,
+    user_id: u.id,
+    user_name: u.name,
+    total_cost: a.cost * u.scale,
+    request_count: Math.max(1, Math.round(a.calls * u.scale)),
+  }))
+)
 
 // Per-provider brand-ish colors. Drives both the node stroke (and thus
 // the rightEdge color strip via inheritance) and the brand-icon fill.
@@ -626,6 +638,17 @@ const SIZE = {
   provider: { w: 180, h: 64, gap: 16 },
 } as const
 
+// Agents pack into columns of `AGENTS_PER_COL` max. Column 0 sits at
+// `COL_X.agent` (closest to the users column); additional columns wrap
+// to the LEFT by `AGENT_COL_SPACING`. So a human with 12 agents gets
+// 3 columns × 4, growing leftward away from the user.
+const AGENTS_PER_COL = 4
+const AGENT_COL_SPACING = SIZE.agent.w + 24
+// Vertical gap between adjacent users' agent blocks. We use this to
+// derive a per-user Y so each user's agent stack lines up with their
+// user card, and the agent stacks don't collide with neighbors.
+const USER_BLOCK_GAP = 32
+
 function stackY(count: number, i: number, h: number, gap: number): number {
   const totalH = count * h + (count - 1) * gap
   const startY = -totalH / 2
@@ -635,10 +658,17 @@ function stackY(count: number, i: number, h: number, gap: number): number {
 function buildGatewayCanvas(): CanvasData {
   const rows = MOCK_ROWS
 
-  // Roll up by user (for the User column) while iterating rows once.
+  // Roll up by user (for the User column) and group agents per user so
+  // we can pack each user's agents into wrapping columns next to that
+  // user's card.
   const userTotals = new Map<
     string,
-    { totalCost: number; requestCount: number; userName: string }
+    {
+      totalCost: number
+      requestCount: number
+      userName: string
+      agents: AgentUserSpend[]
+    }
   >()
   let swarmTotal = 0
   for (const r of rows) {
@@ -647,11 +677,13 @@ function buildGatewayCanvas(): CanvasData {
     if (u) {
       u.totalCost += r.total_cost
       u.requestCount += r.request_count
+      u.agents.push(r)
     } else {
       userTotals.set(r.user_id, {
         totalCost: r.total_cost,
         requestCount: r.request_count,
         userName: r.user_name || r.user_id,
+        agents: [r],
       })
     }
   }
@@ -659,24 +691,59 @@ function buildGatewayCanvas(): CanvasData {
   const users = Array.from(userTotals.entries())
   users.sort((a, b) => b[1].totalCost - a[1].totalCost)
 
+  // Per-user vertical slot: tall enough to hold the bigger of (user
+  // card, agent block). Agent block height is bounded by the column
+  // cap — anything beyond `AGENTS_PER_COL` wraps into a new column to
+  // the left rather than growing the slot taller.
+  const slotHeights = users.map(([, agg]) => {
+    const rowsInTallestCol = Math.min(agg.agents.length, AGENTS_PER_COL)
+    const agentBlockH =
+      rowsInTallestCol * SIZE.agent.h +
+      Math.max(0, rowsInTallestCol - 1) * SIZE.agent.gap
+    return Math.max(SIZE.user.h, agentBlockH)
+  })
+  const totalLayoutH =
+    slotHeights.reduce((s, h) => s + h, 0) +
+    Math.max(0, users.length - 1) * USER_BLOCK_GAP
+  let cursorY = -totalLayoutH / 2
+  // Center-Y per user slot, indexed by user index.
+  const userCenterY: number[] = []
+  for (let i = 0; i < users.length; i++) {
+    userCenterY.push(cursorY + slotHeights[i] / 2)
+    cursorY += slotHeights[i] + USER_BLOCK_GAP
+  }
+
   const nodes: CanvasNode[] = []
 
-  // Agents column — one per pairing.
-  rows.forEach((r, i) => {
-    nodes.push({
-      id: `agent:${r.agent_name}:${r.user_id}`,
-      type: 'text',
-      category: 'agent',
-      text: '',
-      x: COL_X.agent,
-      y: stackY(rows.length, i, SIZE.agent.h, SIZE.agent.gap),
-      width: SIZE.agent.w,
-      height: SIZE.agent.h,
-      customData: {
-        name: r.agent_name,
-        cost: r.total_cost,
-        calls: r.request_count,
-      },
+  // Agents — packed per-user into wrapping columns (column 0 closest
+  // to the user card, additional columns extending leftward). Each
+  // user's block is top-left anchored: every column starts at the
+  // same top Y (the top of the user's vertical slot) and fills
+  // downward, so partial trailing columns are short but still flush
+  // to the top of the row.
+  users.forEach(([, agg], userIdx) => {
+    const slotTop = userCenterY[userIdx] - slotHeights[userIdx] / 2
+    agg.agents.forEach((r, agentIdx) => {
+      const col = Math.floor(agentIdx / AGENTS_PER_COL)
+      const rowInCol = agentIdx % AGENTS_PER_COL
+      const y =
+        slotTop + rowInCol * (SIZE.agent.h + SIZE.agent.gap) + SIZE.agent.h / 2
+      const x = COL_X.agent - col * AGENT_COL_SPACING
+      nodes.push({
+        id: `agent:${r.agent_name}:${r.user_id}`,
+        type: 'text',
+        category: 'agent',
+        text: '',
+        x,
+        y,
+        width: SIZE.agent.w,
+        height: SIZE.agent.h,
+        customData: {
+          name: r.agent_name,
+          cost: r.total_cost,
+          calls: r.request_count,
+        },
+      })
     })
   })
 
@@ -688,7 +755,7 @@ function buildGatewayCanvas(): CanvasData {
       category: 'user',
       text: '',
       x: COL_X.user,
-      y: stackY(users.length, i, SIZE.user.h, SIZE.user.gap),
+      y: userCenterY[i],
       width: SIZE.user.w,
       height: SIZE.user.h,
       customData: {
