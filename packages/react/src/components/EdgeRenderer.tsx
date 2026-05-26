@@ -4,6 +4,7 @@ import type {
   ResolvedNode,
   CanvasTheme,
   EdgeStyle,
+  ViewportState,
 } from 'system-canvas'
 import {
   computeEdgePath,
@@ -11,6 +12,7 @@ import {
   resolveColor,
   measureTextWidth,
 } from 'system-canvas'
+import { useWaypointDrag } from '../hooks/useWaypointDrag.js'
 
 interface EdgeRendererProps {
   edges: CanvasEdge[]
@@ -28,6 +30,12 @@ interface EdgeRendererProps {
   dimmedNodeIds?: Set<string>
   /** Parallel group info per edge id for auto-offsetting overlapping edges. */
   parallelGroups?: Map<string, { index: number; total: number }>
+  /** When true, waypoint handles are rendered for the selected edge. */
+  editable?: boolean
+  /** Called when the user commits a waypoint drag or adds/removes a waypoint. */
+  onWaypointCommit?: (edgeId: string, waypoints: { x: number; y: number }[]) => void
+  /** Viewport ref — needed for converting screen coords to canvas coords during waypoint drag. */
+  viewportRef?: React.RefObject<ViewportState>
 }
 
 /**
@@ -46,7 +54,19 @@ export function EdgeRenderer({
   editingId,
   dimmedNodeIds,
   parallelGroups,
+  editable,
+  onWaypointCommit,
+  viewportRef,
 }: EdgeRendererProps) {
+  // Stable fallback ref so the hook is always called unconditionally.
+  const fallbackViewportRef = React.useRef<ViewportState>({ x: 0, y: 0, zoom: 1 })
+  const effectiveViewportRef = (viewportRef ?? fallbackViewportRef) as React.RefObject<ViewportState>
+
+  const { overrides, onHandlePointerDown, onHandleDoubleClick, onGhostClick } =
+    useWaypointDrag({
+      viewport: effectiveViewportRef,
+      onCommit: onWaypointCommit ?? (() => {}),
+    })
   return (
     <>
       {/* Arrowhead marker definition. Uses `context-stroke` so the polygon
@@ -194,6 +214,89 @@ export function EdgeRenderer({
                 })()}
               </>
             )}
+
+            {/* Waypoint drag handles — only in editable mode when this edge is selected */}
+            {editable && isSelected && (() => {
+              const baseWaypoints = edge.waypoints ?? []
+
+              // Apply live drag overrides
+              const liveWaypoints = baseWaypoints.map((wp, i) =>
+                overrides.has(i) ? overrides.get(i)! : wp
+              )
+
+              // Ghost midpoints: between each pair of consecutive waypoints,
+              // plus before the first and after the last (using edge midpoint).
+              // When no waypoints exist, a single ghost at the edge midpoint is shown.
+              const ghostPoints: { x: number; y: number; insertAfterIndex: number }[] = []
+
+              if (liveWaypoints.length === 0) {
+                // Single ghost at auto-midpoint to let user start routing
+                ghostPoints.push({ x: midpoint.x, y: midpoint.y, insertAfterIndex: -1 })
+              } else {
+                // Ghost before first waypoint (midpoint between edge start anchor and first wp)
+                // We approximate start anchor as the midpoint between the edge anchor and first wp.
+                // For simplicity, use the midpoint between edge midpoint and first waypoint.
+                ghostPoints.push({
+                  x: (midpoint.x + liveWaypoints[0].x) / 2,
+                  y: (midpoint.y + liveWaypoints[0].y) / 2,
+                  insertAfterIndex: -1,
+                })
+                // Ghosts between consecutive waypoints
+                for (let i = 0; i < liveWaypoints.length - 1; i++) {
+                  ghostPoints.push({
+                    x: (liveWaypoints[i].x + liveWaypoints[i + 1].x) / 2,
+                    y: (liveWaypoints[i].y + liveWaypoints[i + 1].y) / 2,
+                    insertAfterIndex: i,
+                  })
+                }
+                // Ghost after last waypoint
+                ghostPoints.push({
+                  x: (liveWaypoints[liveWaypoints.length - 1].x + midpoint.x) / 2,
+                  y: (liveWaypoints[liveWaypoints.length - 1].y + midpoint.y) / 2,
+                  insertAfterIndex: liveWaypoints.length - 1,
+                })
+              }
+
+              return (
+                <>
+                  {/* Ghost midpoint handles */}
+                  {ghostPoints.map((gp, i) => (
+                    <circle
+                      key={`ghost-${i}`}
+                      cx={gp.x}
+                      cy={gp.y}
+                      r={4}
+                      fill={theme.edge.stroke}
+                      opacity={0.35}
+                      style={{ cursor: 'crosshair' }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onGhostClick(edge.id, liveWaypoints, gp.insertAfterIndex, { x: gp.x, y: gp.y })
+                      }}
+                    />
+                  ))}
+
+                  {/* Solid waypoint handles */}
+                  {liveWaypoints.map((wp, i) => (
+                    <circle
+                      key={`wp-${i}`}
+                      cx={wp.x}
+                      cy={wp.y}
+                      r={5}
+                      fill={theme.node.labelColor}
+                      stroke={theme.edge.stroke}
+                      strokeWidth={1.5}
+                      style={{ cursor: 'grab' }}
+                      onPointerDown={(e) => onHandlePointerDown(edge.id, liveWaypoints, i, e)}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation()
+                        onHandleDoubleClick(edge.id, liveWaypoints, i)
+                      }}
+                    />
+                  ))}
+                </>
+              )
+            })()}
           </g>
         )
       })}

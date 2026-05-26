@@ -1408,6 +1408,13 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
     setEditingEdgeId(null)
   }, [])
 
+  const handleEdgeWaypointUpdate = useCallback(
+    (edgeId: string, patch: EdgeUpdate) => {
+      wrappedOnEdgeUpdate(edgeId, patch, currentCanvasRef)
+    },
+    [wrappedOnEdgeUpdate, currentCanvasRef]
+  )
+
   // Cascade offset for rapid successive adds
   const lastAddRef = useRef<{ t: number; offset: number } | null>(null)
 
@@ -1592,6 +1599,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
         onEditorCancel={handleEditorCancel}
         onEdgeEditorCommit={handleEdgeEditorCommit}
         onEdgeEditorCancel={handleEdgeEditorCancel}
+        onEdgeWaypointUpdate={editable ? handleEdgeWaypointUpdate : undefined}
         pendingEdge={editable ? pendingEdge : null}
         onConnectionHandlePointerDown={
           editable ? onConnectionHandlePointerDown : undefined
