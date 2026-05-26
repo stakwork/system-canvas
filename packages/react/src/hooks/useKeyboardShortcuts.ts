@@ -9,6 +9,7 @@ import type {
 } from 'system-canvas'
 import { generateNodeId, generateEdgeId } from 'system-canvas'
 import type { NodeContextMenuOverlayState } from '../components/NodeContextMenuOverlay.js'
+import type { EdgeContextMenuOverlayState } from '../components/EdgeContextMenuOverlay.js'
 
 interface NodeDragUpdate {
   id: string
@@ -50,6 +51,8 @@ interface UseKeyboardShortcutsOptions {
   setEditingEdgeId: (id: string | null) => void
   setSelectedEdgeId: (id: string | null) => void
   setContextMenuState: (state: NodeContextMenuOverlayState | null) => void
+  edgeContextMenuState: EdgeContextMenuOverlayState | null
+  setEdgeContextMenuState: (state: EdgeContextMenuOverlayState | null) => void
   cancelDrag: () => void
 }
 
@@ -85,6 +88,8 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions) {
     setEditingEdgeId,
     setSelectedEdgeId,
     setContextMenuState,
+    edgeContextMenuState,
+    setEdgeContextMenuState,
     cancelDrag,
   } = options
 
@@ -96,6 +101,10 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions) {
       if (e.key === 'Escape') {
         if (contextMenuState) {
           setContextMenuState(null)
+          return
+        }
+        if (edgeContextMenuState) {
+          setEdgeContextMenuState(null)
           return
         }
         if (editingId || editingEdgeId) {
@@ -330,6 +339,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions) {
       theme,
       currentCanvasRef,
       contextMenuState,
+      edgeContextMenuState,
       wrappedOnNodeAdd,
       wrappedOnEdgeAdd,
       wrappedOnNodeUpdate,
