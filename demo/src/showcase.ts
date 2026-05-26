@@ -587,7 +587,7 @@ function accentNote(color: string, kicker: string): any {
   return {
     ...baseCard,
     defaultWidth: SMALL_W,
-    defaultHeight: 86,
+    defaultHeight: 110,
     type: 'text' as const,
     stroke: hexAlpha(color, 0.35),
     fill: hexAlpha(color, 0.05),
@@ -842,7 +842,7 @@ nodes.push({
   x: initiativesOffsetX + initiativesTotalW + CARD_GAP,
   y: ROW_Y.initiatives,
   width: SMALL_W,
-  height: 86,
+  height: 110,
 })
 
 // --- Secondary initiatives ---
@@ -875,7 +875,7 @@ nodes.push({
   x: secondaryOffsetX + secondaryTotalW + CARD_GAP,
   y: ROW_Y.secondary,
   width: SMALL_W,
-  height: 86,
+  height: 110,
 })
 
 // --- Footer cards: customers + revenue ---

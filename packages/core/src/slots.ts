@@ -175,8 +175,13 @@ export function computeCategorySlotRegions(
           // and sits at HEADER_INSET_Y; pad another small gap so the
           // bar reads as decoration rather than a divider line.
           y + HEADER_INSET_Y + fs + 6
-        : // Legacy: under one line of body text.
-          y + HEADER_INSET_Y + fs + Math.round(fs * 0.9)
+        : // No header: anchor just above the footer strip so the bar
+          // sits between the body content and the stats region
+          // regardless of how many lines the title wraps to. A
+          // top-anchored position (legacy: HEADER_INSET_Y + fs + 0.9em)
+          // only works for single-line titles; multi-line titles wrap
+          // into the bar because the centered label straddles it.
+          y + height - FOOTER_INSET_Y - footer - bandHeight - 6
       return {
         x: x + HEADER_INSET_X,
         y: bandY,
