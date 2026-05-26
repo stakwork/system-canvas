@@ -33,6 +33,10 @@ export type {
   NodeContextMenuConfig,
   NodeContextMenuMatchContext,
   NodeContextMenuSelectContext,
+  EdgeContextMenuItem,
+  EdgeContextMenuConfig,
+  EdgeContextMenuMatchContext,
+  EdgeContextMenuSelectContext,
   NodeUpdate,
   EdgeUpdate,
   NodeMenuOption,
@@ -122,6 +126,12 @@ export {
   matchesContextMenuItem,
   filterContextMenuItems,
 } from './contextMenu.js'
+
+// Edge context-menu filtering helpers
+export {
+  matchesEdgeContextMenuItem,
+  filterEdgeContextMenuItems,
+} from './edgeContextMenu.js'
 
 // Rollup helpers
 export { rollupNodes, rollupNodesDeep } from './rollup.js'

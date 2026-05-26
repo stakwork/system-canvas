@@ -21,6 +21,7 @@ import type {
   CanvasNode,
   CanvasEdge,
   NodeContextMenuConfig,
+  EdgeContextMenuConfig,
   NodeUpdate,
   EdgeUpdate,
 } from 'system-canvas'
@@ -433,6 +434,40 @@ function App() {
     [handleNodeUpdate, handleNodeDelete]
   )
 
+  // ---------------------------------------------------------------------
+  // Edge context menu — system & gateway modes
+  //
+  // Right-clicking an edge in system or gateway mode opens a small menu
+  // with "Toggle Animation" (flips marching-ants on/off) and "Delete Edge".
+  // Demonstrates the symmetric `edgeContextMenu` API.
+  // ---------------------------------------------------------------------
+  const demoEdgeContextMenu = useMemo<EdgeContextMenuConfig>(
+    () => ({
+      items: [
+        {
+          id: 'toggle-animation',
+          label: 'Toggle Animation',
+        },
+        {
+          id: 'delete-edge',
+          label: 'Delete Edge',
+          destructive: true,
+        },
+      ],
+      onSelect(itemId, edge, ctx) {
+        switch (itemId) {
+          case 'toggle-animation':
+            handleEdgeUpdate(edge.id, { animated: !edge.animated }, ctx.canvasRef ?? undefined)
+            break
+          case 'delete-edge':
+            handleEdgeDelete(edge.id, ctx.canvasRef ?? undefined)
+            break
+        }
+      },
+    }),
+    [handleEdgeUpdate, handleEdgeDelete]
+  )
+
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
       {/* Theme / controls bar */}
@@ -598,6 +633,7 @@ function App() {
         // browser's default right-click behavior so we don't have to
         // invent menus for every demo.
         nodeContextMenu={mode === 'showcase' ? showcaseContextMenu : undefined}
+        edgeContextMenu={['system', 'gateway'].includes(mode) ? demoEdgeContextMenu : undefined}
         onNodeClick={(node: CanvasNode) => {
           console.log('Node clicked:', node.id)
         }}

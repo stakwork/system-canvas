@@ -1,0 +1,35 @@
+import type { CanvasEdge, EdgeContextMenuItem, EdgeContextMenuMatchContext } from './types.js'
+
+/**
+ * Decide whether a single context-menu item should appear for a given edge.
+ *
+ * Rules:
+ *   - No `match` block => matches every edge.
+ *   - `match.when(edge, ctx)` is an arbitrary predicate.
+ *
+ * Omitting `match` entirely matches every edge.
+ */
+export function matchesEdgeContextMenuItem(
+  item: EdgeContextMenuItem,
+  edge: CanvasEdge,
+  ctx: EdgeContextMenuMatchContext
+): boolean {
+  const m = item.match
+  if (!m) return true
+  if (m.when && !m.when(edge, ctx)) return false
+  return true
+}
+
+/**
+ * Filter a list of items down to the ones that should appear for the
+ * right-clicked edge. Used internally by `<EdgeContextMenuOverlay>`;
+ * exposed so consumers building their own menu UI on top of the raw
+ * `onContextMenu` callback can apply the same filtering rules.
+ */
+export function filterEdgeContextMenuItems(
+  items: EdgeContextMenuItem[],
+  edge: CanvasEdge,
+  ctx: EdgeContextMenuMatchContext
+): EdgeContextMenuItem[] {
+  return items.filter((item) => matchesEdgeContextMenuItem(item, edge, ctx))
+}

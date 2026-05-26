@@ -1315,6 +1315,52 @@ export interface NodeContextMenuConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Edge context menu types
+// ---------------------------------------------------------------------------
+
+/** Context passed to edge context-menu predicates. */
+export interface EdgeContextMenuMatchContext {
+  canvasRef: string | null
+}
+
+/**
+ * A single item in the declarative edge context menu.
+ * `CanvasEdge` has no `category` or `type` fields, so only a `when`
+ * predicate is available in `match`.
+ */
+export interface EdgeContextMenuItem {
+  id: string
+  label: string
+  icon?: string
+  destructive?: boolean
+  /** Only `when` — CanvasEdge has no category or type fields. */
+  match?: {
+    when?: (edge: CanvasEdge, ctx: EdgeContextMenuMatchContext) => boolean
+  }
+  /** Optional per-edge disabled state. Item renders but is non-clickable. */
+  disabled?: (edge: CanvasEdge, ctx: EdgeContextMenuMatchContext) => boolean
+}
+
+/**
+ * Context passed to `onSelect` when the user picks an item. Includes the
+ * screen position of the original right-click so the consumer can spawn a
+ * follow-up popover or dialog at the same spot.
+ */
+export interface EdgeContextMenuSelectContext extends EdgeContextMenuMatchContext {
+  screenPosition: { x: number; y: number }
+}
+
+/** Top-level config for the declarative edge context menu. */
+export interface EdgeContextMenuConfig {
+  items: EdgeContextMenuItem[]
+  onSelect: (
+    itemId: string,
+    edge: CanvasEdge,
+    ctx: EdgeContextMenuSelectContext
+  ) => void
+}
+
+// ---------------------------------------------------------------------------
 // Editing types
 // ---------------------------------------------------------------------------
 

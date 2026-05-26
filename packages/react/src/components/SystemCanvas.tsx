@@ -18,6 +18,7 @@ import type {
   ViewportState,
   ContextMenuEvent,
   NodeContextMenuConfig,
+  EdgeContextMenuConfig,
   ResolvedNode,
   NodeUpdate,
   EdgeUpdate,
@@ -32,6 +33,7 @@ import {
   getNodeMenuOptions,
   createNodeFromOption,
   filterContextMenuItems,
+  filterEdgeContextMenuItems,
   screenToCanvas,
   snapToLane,
   alignNodes,
@@ -63,6 +65,10 @@ import {
   NodeContextMenuOverlay,
   type NodeContextMenuOverlayState,
 } from './NodeContextMenuOverlay.js'
+import {
+  EdgeContextMenuOverlay,
+  type EdgeContextMenuOverlayState,
+} from './EdgeContextMenuOverlay.js'
 import { SearchOverlay } from './SearchOverlay.js'
 
 export interface SystemCanvasProps {
@@ -150,6 +156,12 @@ export interface SystemCanvasProps {
    * still suppress the browser default and forward through `onContextMenu`.
    */
   nodeContextMenu?: NodeContextMenuConfig
+  /**
+   * Declarative context menu for edge right-clicks. Mirrors `nodeContextMenu`
+   * but operates on `CanvasEdge` targets. When not set, no library-rendered
+   * menu appears on edge right-clicks.
+   */
+  edgeContextMenu?: EdgeContextMenuConfig
 
   // --- Editing ---
   /** When true, the canvas becomes editable (add / edit / move / delete). */
@@ -414,6 +426,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
       onContextMenu,
       onSelectionChange,
       nodeContextMenu,
+      edgeContextMenu,
       editable = false,
       onNodeAdd,
       onNodeUpdate,
@@ -1262,11 +1275,16 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
   const [contextMenuState, setContextMenuState] =
     useState<NodeContextMenuOverlayState | null>(null)
 
-  // Reset the open menu whenever the user navigates between canvases. The
-  // node it was anchored to may not exist on the new scope; even if it
-  // does, the menu's screen position would be stale.
+  // Declarative edge context menu state — mirrors contextMenuState for edges.
+  const [edgeContextMenuState, setEdgeContextMenuState] =
+    useState<EdgeContextMenuOverlayState | null>(null)
+
+  // Reset the open menus whenever the user navigates between canvases. The
+  // node/edge they were anchored to may not exist on the new scope; even if
+  // they do, the menu's screen position would be stale.
   useEffect(() => {
     setContextMenuState(null)
+    setEdgeContextMenuState(null)
   }, [currentCanvasRef])
 
   /**
@@ -1281,56 +1299,70 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
   const handleContextMenu = useCallback(
     (event: ContextMenuEvent) => {
       onContextMenu?.(event)
-      if (!nodeContextMenu && !alignDistributeMenu) return
-      if (event.type !== 'node') return
-      const node = event.target as CanvasNode | undefined
-      if (!node) return
 
-      const matchCtx = { canvasRef: currentCanvasRef ?? null }
-      const matched = nodeContextMenu
-        ? filterContextMenuItems(nodeContextMenu.items, node, matchCtx)
-        : []
+      if (event.type === 'node') {
+        if (!nodeContextMenu && !alignDistributeMenu) return
+        const node = event.target as CanvasNode | undefined
+        if (!node) return
 
-      // Inject built-in align/distribute items when the right-clicked node
-      // is part of the current multi-selection (2+ nodes).
-      if (alignDistributeMenu && selectedIds.size >= 2 && selectedIds.has(node.id)) {
-        const canDistribute = selectedIds.size >= 3
-        const builtins = [
-          { id: '__sys_align_left__',    label: 'Align Left' },
-          { id: '__sys_align_right__',   label: 'Align Right' },
-          { id: '__sys_align_top__',     label: 'Align Top' },
-          { id: '__sys_align_bottom__',  label: 'Align Bottom' },
-          { id: '__sys_align_centerH__', label: 'Align Center Horizontal' },
-          { id: '__sys_align_centerV__', label: 'Align Center Vertical' },
-          {
-            id: '__sys_distribute_h__',
-            label: 'Distribute Horizontally',
-            disabled: canDistribute ? undefined : () => !canDistribute,
-          },
-          {
-            id: '__sys_distribute_v__',
-            label: 'Distribute Vertically',
-            disabled: canDistribute ? undefined : () => !canDistribute,
-          },
-        ]
-        matched.push(...builtins)
+        const matchCtx = { canvasRef: currentCanvasRef ?? null }
+        const matched = nodeContextMenu
+          ? filterContextMenuItems(nodeContextMenu.items, node, matchCtx)
+          : []
+
+        // Inject built-in align/distribute items when the right-clicked node
+        // is part of the current multi-selection (2+ nodes).
+        if (alignDistributeMenu && selectedIds.size >= 2 && selectedIds.has(node.id)) {
+          const canDistribute = selectedIds.size >= 3
+          const builtins = [
+            { id: '__sys_align_left__',    label: 'Align Left' },
+            { id: '__sys_align_right__',   label: 'Align Right' },
+            { id: '__sys_align_top__',     label: 'Align Top' },
+            { id: '__sys_align_bottom__',  label: 'Align Bottom' },
+            { id: '__sys_align_centerH__', label: 'Align Center Horizontal' },
+            { id: '__sys_align_centerV__', label: 'Align Center Vertical' },
+            {
+              id: '__sys_distribute_h__',
+              label: 'Distribute Horizontally',
+              disabled: canDistribute ? undefined : () => !canDistribute,
+            },
+            {
+              id: '__sys_distribute_v__',
+              label: 'Distribute Vertically',
+              disabled: canDistribute ? undefined : () => !canDistribute,
+            },
+          ]
+          matched.push(...builtins)
+        }
+
+        if (matched.length === 0) {
+          setContextMenuState(null)
+          return
+        }
+        setContextMenuState({
+          items: matched,
+          node,
+          screenPosition: event.screenPosition,
+          canvasRef: currentCanvasRef ?? null,
+        })
+      } else if (event.type === 'edge' && edgeContextMenu) {
+        const edge = event.target as CanvasEdge | undefined
+        if (!edge) return
+        const matchCtx = { canvasRef: currentCanvasRef ?? null }
+        const matched = filterEdgeContextMenuItems(edgeContextMenu.items, edge, matchCtx)
+        if (matched.length === 0) {
+          setEdgeContextMenuState(null)
+          return
+        }
+        setEdgeContextMenuState({
+          items: matched,
+          edge,
+          screenPosition: event.screenPosition,
+          canvasRef: currentCanvasRef ?? null,
+        })
       }
-
-      if (matched.length === 0) {
-        // No items applied to this node — close any stale menu and let
-        // the right-click be a no-op (the browser default is already
-        // suppressed by the underlying interaction hook).
-        setContextMenuState(null)
-        return
-      }
-      setContextMenuState({
-        items: matched,
-        node,
-        screenPosition: event.screenPosition,
-        canvasRef: currentCanvasRef ?? null,
-      })
     },
-    [onContextMenu, nodeContextMenu, currentCanvasRef, alignDistributeMenu, selectedIds]
+    [onContextMenu, nodeContextMenu, edgeContextMenu, currentCanvasRef, alignDistributeMenu, selectedIds]
   )
 
   // Effective context menu config — wraps the consumer's config (if any) and
@@ -1486,6 +1518,8 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
     currentCanvasRef,
     contextMenuState,
     setContextMenuState,
+    edgeContextMenuState,
+    setEdgeContextMenuState,
     wrappedOnNodeAdd,
     wrappedOnEdgeAdd,
     wrappedOnNodeUpdate,
@@ -1693,6 +1727,15 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
           config={effectiveNodeContextMenu}
           theme={theme}
           onClose={() => setContextMenuState(null)}
+        />
+      )}
+
+      {edgeContextMenu && (
+        <EdgeContextMenuOverlay
+          state={edgeContextMenuState}
+          config={edgeContextMenu}
+          theme={theme}
+          onClose={() => setEdgeContextMenuState(null)}
         />
       )}
 

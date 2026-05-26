@@ -71,6 +71,8 @@ function makeCallbacks() {
     setEditingEdgeId: vi.fn(),
     setSelectedEdgeId: vi.fn(),
     setContextMenuState: vi.fn(),
+    edgeContextMenuState: null,
+    setEdgeContextMenuState: vi.fn(),
     cancelDrag: vi.fn(),
   }
 }
