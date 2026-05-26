@@ -1,7 +1,7 @@
 {
   "name": "system-canvas-monorepo",
   "private": true,
-  "version": "0.2.17",
+  "version": "0.2.18",
   "workspaces": [
     "packages/*",
     "demo"
