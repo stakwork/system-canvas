@@ -196,6 +196,7 @@ export const rootCanvas: CanvasData = {
       toNode: 'api-gateway',
       toSide: 'left',
       label: 'HTTPS',
+      animated: true,
     },
     {
       id: 'e2',
@@ -204,6 +205,15 @@ export const rootCanvas: CanvasData = {
       toNode: 'auth-service',
       toSide: 'left',
       label: 'Auth',
+    },
+    {
+      id: 'e2r',
+      fromNode: 'auth-service',
+      fromSide: 'left',
+      toNode: 'api-gateway',
+      toSide: 'right',
+      label: 'token',
+      animated: true,
     },
     {
       id: 'e3',
@@ -247,6 +257,7 @@ export const rootCanvas: CanvasData = {
       toNode: 'kafka',
       toSide: 'left',
       label: 'CDC',
+      animated: true,
     },
     {
       id: 'e9',
@@ -273,6 +284,7 @@ export const rootCanvas: CanvasData = {
       toSide: 'right',
       label: 'metrics',
       color: '3',
+      animated: true,
     },
   ],
 }
@@ -720,9 +732,9 @@ export const monitoringCanvas: CanvasData = {
   ],
   edges: [
     // Collection -> Prometheus
-    { id: 'mon-e1', fromNode: 'node-exporter', fromSide: 'right', toNode: 'prometheus', toSide: 'left', label: 'scrape' },
+    { id: 'mon-e1', fromNode: 'node-exporter', fromSide: 'right', toNode: 'prometheus', toSide: 'left', label: 'scrape', animated: true },
     { id: 'mon-e2', fromNode: 'kube-state', fromSide: 'right', toNode: 'prometheus', toSide: 'left' },
-    { id: 'mon-e3', fromNode: 'app-metrics', fromSide: 'right', toNode: 'prometheus', toSide: 'left', label: 'scrape' },
+    { id: 'mon-e3', fromNode: 'app-metrics', fromSide: 'right', toNode: 'prometheus', toSide: 'left', label: 'scrape', animated: true },
     { id: 'mon-e4', fromNode: 'otel-collector', fromSide: 'right', toNode: 'loki', toSide: 'left', label: 'logs' },
     { id: 'mon-e5', fromNode: 'scrape-config', fromSide: 'right', toNode: 'prometheus', toSide: 'left', label: 'config' },
 
@@ -966,6 +978,7 @@ export const podWorkerCanvas: CanvasData = {
       toNode: 'supervisor',
       toSide: 'right',
       label: 'tasks',
+      animated: true,
     },
     {
       id: 'pw-e2',
@@ -980,6 +993,7 @@ export const podWorkerCanvas: CanvasData = {
     { id: 'pw-e5', fromNode: 'supervisor', fromSide: 'bottom', toNode: 'agent-review', toSide: 'top' },
     { id: 'pw-e6', fromNode: 'supervisor', fromSide: 'bottom', toNode: 'agent-docs', toSide: 'top' },
     { id: 'pw-e7', fromNode: 'supervisor', fromSide: 'bottom', toNode: 'agent-test', toSide: 'top' },
+    { id: 'pw-e8', fromNode: 'supervisor', toNode: 'supervisor', label: 'retry' },
   ],
 }
 
