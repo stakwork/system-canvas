@@ -633,7 +633,7 @@ function App() {
         // browser's default right-click behavior so we don't have to
         // invent menus for every demo.
         nodeContextMenu={mode === 'showcase' ? showcaseContextMenu : undefined}
-        edgeContextMenu={['system', 'gateway'].includes(mode) ? demoEdgeContextMenu : undefined}
+        edgeContextMenu={demoEdgeContextMenu}
         onNodeClick={(node: CanvasNode) => {
           console.log('Node clicked:', node.id)
         }}
