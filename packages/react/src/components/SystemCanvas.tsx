@@ -14,6 +14,7 @@ import type {
   CanvasEdge,
   CanvasSelection,
   CanvasTheme,
+  CollaboratorInfo,
   EdgeStyle,
   ViewportState,
   ContextMenuEvent,
@@ -70,6 +71,7 @@ import {
   type EdgeContextMenuOverlayState,
 } from './EdgeContextMenuOverlay.js'
 import { SearchOverlay } from './SearchOverlay.js'
+import { CollaboratorsOverlay } from './CollaboratorsOverlay.js'
 
 export interface SystemCanvasProps {
   /** Canvas data to render */
@@ -375,6 +377,15 @@ export interface SystemCanvasProps {
   /** Called after a redo step. Receives the canvasRef that was affected. */
   onRedo?: (canvasRef: string | undefined) => void
 
+  // --- Collaboration / presence ---
+  /**
+   * Remote collaborators to render as cursors, selection halos, and conflict
+   * flashes. The library owns zero transport — callers supply this array and
+   * update it in response to their own Pusher / WebSocket events. Passing an
+   * empty array (or omitting the prop) is a no-op.
+   */
+  collaborators?: CollaboratorInfo[]
+
   // --- Styling ---
   className?: string
   style?: React.CSSProperties
@@ -407,6 +418,12 @@ export interface SystemCanvasHandle {
   navigateBack: () => void
   /** Reset to the root canvas. */
   navigateToRoot: () => void
+  /**
+   * Returns the current viewport transform (pan + zoom). Useful for
+   * converting between screen-space and canvas-space coordinates from
+   * outside the component (e.g. a collaboration hook tracking the cursor).
+   */
+  getViewport: () => ViewportState
 }
 
 export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
@@ -458,6 +475,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
       historyDepth,
       onUndo,
       onRedo,
+      collaborators = [],
       className,
       style,
     },
@@ -623,6 +641,15 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
   )
   const viewportHandleRef = useRef<ViewportHandle>(null)
 
+  // Mirrors `viewportStateRef` as React state so the collaborators overlay
+  // re-renders on pan/zoom without requiring the full component to know about it.
+  const [collaboratorViewport, setCollaboratorViewport] = useState<ViewportState>(
+    defaultViewport ?? { x: 0, y: 0, zoom: 1 }
+  )
+
+  // Map of nodeId → expiry timestamp (Date.now() + 600ms) for conflict flash.
+  const [flashNodeIds, setFlashNodeIds] = useState<Map<string, number>>(new Map())
+
   // Stable refs used by the imperative handle. We keep them updated on
   // every render so the handle methods (created once via
   // useImperativeHandle) always see fresh state without forcing
@@ -682,6 +709,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
       navigateToRoot: () => {
         navigateToBreadcrumbRef.current(0)
       },
+      getViewport: () => viewportStateRef.current ?? { x: 0, y: 0, zoom: 1 },
     }),
     [forwardedRef]
   )
@@ -1224,6 +1252,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
   const handleViewportChange = useCallback(
     (vp: ViewportState) => {
       viewportStateRef.current = vp
+      setCollaboratorViewport(vp)
       handleZoomNavViewportChange(vp)
       onViewportChange?.(vp)
     },
@@ -1545,6 +1574,53 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
 
   const renderProps: AddNodeButtonRenderProps = { options: menuOptions, addNode, theme }
 
+  // Conflict-flash detection: when a collaborator has a node selected and that
+  // node's position changes externally (i.e. a remote update), briefly flash it.
+  const prevNodePositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map())
+  useEffect(() => {
+    const collaboratorSelectedNodeIds = new Set(
+      collaborators.map((c) => c.selectedNodeId).filter((id): id is string => !!id)
+    )
+    if (collaboratorSelectedNodeIds.size === 0) {
+      prevNodePositionsRef.current = new Map(
+        nodes.map((n) => [n.id, { x: n.x, y: n.y }])
+      )
+      return
+    }
+
+    const prev = prevNodePositionsRef.current
+    const newFlashes: string[] = []
+    for (const node of nodes) {
+      if (!collaboratorSelectedNodeIds.has(node.id)) continue
+      const prevPos = prev.get(node.id)
+      if (prevPos && (prevPos.x !== node.x || prevPos.y !== node.y)) {
+        newFlashes.push(node.id)
+      }
+    }
+
+    prevNodePositionsRef.current = new Map(nodes.map((n) => [n.id, { x: n.x, y: n.y }]))
+
+    if (newFlashes.length > 0) {
+      const expiry = Date.now() + 600
+      setFlashNodeIds((prev) => {
+        const next = new Map(prev)
+        for (const id of newFlashes) next.set(id, expiry)
+        return next
+      })
+      setTimeout(() => {
+        setFlashNodeIds((prev) => {
+          const now = Date.now()
+          const next = new Map(prev)
+          for (const id of newFlashes) {
+            if ((next.get(id) ?? 0) <= now) next.delete(id)
+          }
+          return next
+        })
+      }, 620)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes, collaborators])
+
   return (
     <div
       ref={containerRef}
@@ -1643,6 +1719,16 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
         dimmedNodeIds={dimmedIds}
         highlightedNodeIds={matchingIds}
       />
+
+      {/* Collaborators overlay — cursors, selection halos, conflict flashes */}
+      {collaborators.length > 0 || flashNodeIds.size > 0 ? (
+        <CollaboratorsOverlay
+          collaborators={collaborators}
+          viewport={collaboratorViewport}
+          nodeMap={nodeMap}
+          flashNodeIds={flashNodeIds}
+        />
+      ) : null}
 
       {/* Sticky lane headers overlay (above the viewport SVG) */}
       {showLaneHeaders && (

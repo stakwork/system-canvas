@@ -53,4 +53,6 @@ export { AlignmentGuidesLayer } from './components/AlignmentGuidesLayer.js'
 export type { AlignDirection } from './components/NodeToolbar.js'
 
 // Re-export everything from core for convenience
+export { CollaboratorsOverlay } from './components/CollaboratorsOverlay.js'
+export type { CollaboratorsOverlayProps } from './components/CollaboratorsOverlay.js'
 export * from 'system-canvas'
