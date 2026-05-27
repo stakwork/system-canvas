@@ -5,6 +5,7 @@ export type {
   Side,
   EndShape,
   EdgeStyle,
+  PanMode,
   BackgroundStyle,
   CanvasNode,
   CanvasEdge,

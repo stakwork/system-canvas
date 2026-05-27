@@ -14,6 +14,7 @@ import type {
   ResolvedNode,
   CanvasTheme,
   EdgeStyle,
+  PanMode,
   Side,
   ViewportState,
   NodeUpdate,
@@ -67,6 +68,7 @@ interface ViewportProps {
   minZoom: number
   maxZoom: number
   defaultViewport?: ViewportState
+  panMode?: PanMode
   onViewportChange?: (viewport: ViewportState) => void
   /**
    * Controls when the viewport auto-fits.
@@ -193,6 +195,7 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
       minZoom,
       maxZoom,
       defaultViewport,
+      panMode,
       onViewportChange,
       onNodeClick,
       onNodeDoubleClick,
@@ -238,6 +241,7 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
         minZoom,
         maxZoom,
         defaultViewport,
+        panMode,
         onViewportChange,
         marqueeActiveRef,
       })

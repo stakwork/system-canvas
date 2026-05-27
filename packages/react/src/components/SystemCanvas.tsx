@@ -16,6 +16,7 @@ import type {
   CanvasTheme,
   CollaboratorInfo,
   EdgeStyle,
+  PanMode,
   ViewportState,
   ContextMenuEvent,
   NodeContextMenuConfig,
@@ -311,6 +312,15 @@ export interface SystemCanvasProps {
   maxZoom?: number
   onViewportChange?: (viewport: ViewportState) => void
   /**
+   * Controls how mouse/trackpad gestures map to pan and zoom.
+   *
+   * - `'drag'` (default): drag-to-pan, scroll/pinch-to-zoom. Classic d3-zoom
+   *   behavior, optimal for mouse users.
+   * - `'trackpad'`: two-finger scroll pans, Cmd+scroll (or Ctrl+scroll / pinch)
+   *   zooms. Matches Excalidraw / Figma / Google Maps trackpad conventions.
+   */
+  panMode?: PanMode
+  /**
    * Controls when the viewport auto-fits to the visible content.
    *
    * - `'canvas-change'` (default): fit on initial mount and when navigating
@@ -465,6 +475,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
       minZoom: minZoomProp,
       maxZoom,
       onViewportChange,
+      panMode = 'drag',
       autoFit = 'canvas-change',
       laneHeaders = 'pinned',
       snapToLanes = false,
@@ -1679,6 +1690,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
         minZoom={effectiveMinZoom}
         maxZoom={effectiveMaxZoom}
         defaultViewport={defaultViewport}
+        panMode={panMode}
         autoFit={autoFit}
         canvasRef={currentCanvasRef}
         handoffTransform={pendingHandoff}

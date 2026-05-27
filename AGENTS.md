@@ -54,7 +54,7 @@ React bindings. Depends on `system-canvas` for all types and math.
 - `src/components/Breadcrumbs.tsx` — Navigation breadcrumb trail overlay.
 - `src/components/LanesBackground.tsx` — Renders column/row bands in canvas-space. Sits inside the transformable `<g>` behind all nodes/edges. Draws alternating fills, optional per-lane color overrides, and dividers between adjacent lanes.
 - `src/components/LaneHeaders.tsx` — Screen-space overlay that renders pinned column labels (top strip) and row labels (left strip). Polls the viewport via `requestAnimationFrame` to keep in sync with d3-zoom transforms. Supports `pinned` (sticky to viewport edges) and non-pinned (scrolls with content) modes.
-- `src/hooks/useViewport.ts` — d3-zoom integration, fit-to-content. Rejects pan gestures originating inside `.system-canvas-node`, `.system-canvas-resize-handles`, or `.system-canvas-connection-handles` so node/resize/edge-create drags don't also pan.
+- `src/hooks/useViewport.ts` — d3-zoom integration, fit-to-content. Rejects pan gestures originating inside `.system-canvas-node`, `.system-canvas-resize-handles`, or `.system-canvas-connection-handles` so node/resize/edge-create drags don't also pan. Supports two `panMode`s: `'drag'` (classic d3-zoom) and `'trackpad'` (scroll-to-pan, Cmd+scroll-to-zoom). In trackpad mode, plain wheel events are intercepted by a native `wheel` listener and converted to pan transforms; only modifier-key wheel events pass through to d3-zoom's zoom handler.
 - `src/hooks/useNavigation.ts` — Ref-stack breadcrumb state; prefers the synchronous `canvases` map when present, falls back to `onResolveCanvas` with an internal async cache.
 - `src/hooks/useCanvasInteraction.ts` — Click, double-click, navigate, and context menu handler wiring for both nodes and edges; owns the "clicking one clears selection of the other" rule in editable mode. The context-menu handlers compute both `position` (canvas-space, via `screenToCanvas`) and `screenPosition` (raw `clientX`/`clientY`) on every right-click — consumers picking floating-menu coordinates should use `screenPosition`.
 - `src/hooks/useNodeDrag.ts` — Pointer-event drag with group-children-follow; drag overrides are cleared on pointerup. When `canDropNodeOn` is supplied, the hook also runs a per-frame canvas-space hit-test (skipping the source node and any group children carried with it), exposes the topmost accepted target id as `dropTargetId`, and on release fires `onNodeDrop(sources, target)` and snaps source(s) back instead of committing the position. Topmost-rejected hits short-circuit (no see-through), and the target is re-validated against `nodesRef.current` on release so a target deleted mid-drag falls back to a normal drag-end.
@@ -117,6 +117,15 @@ The viewport is driven by d3-zoom. `defaultViewport` (optional) sets the initial
 - `'never'` — no auto-fit. Consumer is fully responsible for the viewport.
 
 Navigation zoom-to-node animations set an internal flag that makes the very next fit instant (no animation), so the zoom-in-and-snap sequence looks continuous.
+
+### Pan mode
+
+The `panMode` prop on `<SystemCanvas>` controls how mouse/trackpad gestures map to pan and zoom:
+
+- `'drag'` (default) — drag-to-pan, scroll/pinch-to-zoom. Classic d3-zoom behavior, optimal for mouse users.
+- `'trackpad'` — two-finger scroll pans, Cmd+scroll (or Ctrl+scroll / pinch) zooms. Matches Excalidraw / Figma / Google Maps trackpad conventions.
+
+In trackpad mode, d3-zoom's built-in wheel handler is filtered to only accept modifier-key scroll events (Cmd/Ctrl). A separate native `wheel` event listener on the SVG intercepts plain scroll events and translates `deltaX`/`deltaY` into pan transforms. The `panMode` value is read from a ref so it can change at runtime without reinstalling the d3-zoom behavior. Drag-to-pan on the background still works in both modes.
 
 ### Editing model
 

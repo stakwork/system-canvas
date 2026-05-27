@@ -1,14 +1,15 @@
 import { useEffect, useRef, useCallback } from 'react'
-import { zoom, zoomIdentity, type ZoomBehavior } from 'd3-zoom'
+import { zoom, zoomIdentity, zoomTransform, type ZoomBehavior } from 'd3-zoom'
 import { select } from 'd3-selection'
 import 'd3-transition' // Extends d3-selection with .transition()
-import type { ViewportState, ResolvedNode } from 'system-canvas'
+import type { ViewportState, PanMode, ResolvedNode } from 'system-canvas'
 import { fitToBounds } from 'system-canvas'
 
 interface UseViewportOptions {
   minZoom: number
   maxZoom: number
   defaultViewport?: ViewportState
+  panMode?: PanMode
   onViewportChange?: (viewport: ViewportState) => void
   /**
    * When this ref is `true`, d3-zoom pan gestures (non-wheel) are suppressed
@@ -42,7 +43,7 @@ interface UseViewportResult {
 }
 
 export function useViewport(options: UseViewportOptions): UseViewportResult {
-  const { minZoom, maxZoom, defaultViewport, onViewportChange, marqueeActiveRef } = options
+  const { minZoom, maxZoom, defaultViewport, panMode = 'drag', onViewportChange, marqueeActiveRef } = options
 
   const svgRef = useRef<SVGSVGElement | null>(null)
   const groupRef = useRef<SVGGElement | null>(null)
@@ -57,6 +58,11 @@ export function useViewport(options: UseViewportOptions): UseViewportResult {
   // than the one captured on mount.
   const onViewportChangeRef = useRef(onViewportChange)
   onViewportChangeRef.current = onViewportChange
+
+  // Keep panMode in a ref so the d3-zoom filter (installed once) reads the
+  // current value on every event.
+  const panModeRef = useRef(panMode)
+  panModeRef.current = panMode
 
   useEffect(() => {
     const svg = svgRef.current
@@ -79,9 +85,19 @@ export function useViewport(options: UseViewportOptions): UseViewportResult {
         // don't block ctrl+wheel — letting it through matches d3-zoom's
         // default (native pinch gestures come through as ctrl+wheel).
         if (event.button) return false
-        // Wheel events always pass through — zooming should work regardless
-        // of what's under the cursor.
-        if (event.type === 'wheel') return true
+
+        if (event.type === 'wheel') {
+          // In trackpad mode, only let Cmd+scroll / Ctrl+scroll (pinch)
+          // through to d3-zoom's zoom handler. Plain scrolls are intercepted
+          // by the custom wheel listener below and turned into pan transforms.
+          if (panModeRef.current === 'trackpad') {
+            return event.metaKey || event.ctrlKey
+          }
+          // In drag mode, wheel events always pass through — zooming works
+          // regardless of what's under the cursor.
+          return true
+        }
+
         const target = event.target as Element | null
         if (target && typeof target.closest === 'function') {
           if (target.closest('.system-canvas-node')) return false
@@ -113,7 +129,28 @@ export function useViewport(options: UseViewportOptions): UseViewportResult {
       selection.call(zoomBehavior.transform, t)
     }
 
+    // --- Trackpad mode: scroll-to-pan ---
+    // In trackpad mode, plain wheel events (without Cmd/Ctrl) are blocked
+    // from d3-zoom's zoom handler by the filter above. This listener
+    // intercepts them and applies deltaX/deltaY as a pan translation.
+    const handleTrackpadWheel = (event: WheelEvent) => {
+      if (panModeRef.current !== 'trackpad') return
+      // Let Cmd+scroll / Ctrl+scroll (pinch) through to d3-zoom for zoom
+      if (event.metaKey || event.ctrlKey) return
+
+      event.preventDefault()
+
+      const t = zoomTransform(svg)
+      const newT = zoomIdentity
+        .translate(t.x - event.deltaX, t.y - event.deltaY)
+        .scale(t.k)
+      selection.call(zoomBehavior.transform, newT)
+    }
+
+    svg.addEventListener('wheel', handleTrackpadWheel, { passive: false })
+
     return () => {
+      svg.removeEventListener('wheel', handleTrackpadWheel)
       selection.on('.zoom', null)
     }
   }, [minZoom, maxZoom]) // eslint-disable-line react-hooks/exhaustive-deps

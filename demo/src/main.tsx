@@ -20,6 +20,7 @@ import type {
   CanvasTheme,
   CanvasNode,
   CanvasEdge,
+  PanMode,
   NodeContextMenuConfig,
   EdgeContextMenuConfig,
   NodeUpdate,
@@ -116,6 +117,7 @@ function App() {
   const [editable, setEditable] = useState<boolean>(true)
   const [zoomNavigation, setZoomNavigation] = useState<boolean>(true)
   const [snapToLanes, setSnapToLanes] = useState<boolean>(true)
+  const [panMode, setPanMode] = useState<PanMode>('trackpad')
 
   // Imperative handle for programmatic camera control (cinematic tour)
   const canvasHandleRef = useRef<SystemCanvasHandle>(null)
@@ -603,6 +605,25 @@ function App() {
             Snap to lanes
           </label>
         )}
+        <label>
+          Pan:{' '}
+          <select
+            value={panMode}
+            onChange={(e) => setPanMode(e.target.value as PanMode)}
+            style={{
+              background: 'transparent',
+              color: theme.breadcrumbs.activeColor,
+              border: `1px solid ${theme.breadcrumbs.separatorColor}`,
+              borderRadius: 4,
+              padding: '2px 6px',
+              fontFamily: 'inherit',
+              fontSize: 'inherit',
+            }}
+          >
+            <option value="drag">drag</option>
+            <option value="trackpad">trackpad</option>
+          </select>
+        </label>
       </div>
 
       <SystemCanvas
@@ -618,6 +639,7 @@ function App() {
         themes={allThemes}
         edgeStyle={edgeStyle}
         editable={editable}
+        panMode={panMode}
         zoomNavigation={zoomNavigation}
         snapToLanes={MODE_HAS_LANES[mode] ? snapToLanes : false}
         rootLabel={MODE_ROOT_LABEL[mode]}

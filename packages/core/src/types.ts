@@ -9,6 +9,16 @@ export type NodeType = 'text' | 'file' | 'link' | 'group'
 export type Side = 'top' | 'right' | 'bottom' | 'left'
 export type EndShape = 'none' | 'arrow'
 export type EdgeStyle = 'bezier' | 'straight' | 'orthogonal'
+
+/**
+ * Controls how mouse/trackpad gestures map to pan and zoom.
+ *
+ * - `'drag'` (default): drag-to-pan, scroll/pinch-to-zoom. Classic d3-zoom
+ *   behavior, optimal for mouse users.
+ * - `'trackpad'`: two-finger scroll pans, Cmd+scroll (or Ctrl+scroll / pinch)
+ *   zooms. Matches Excalidraw / Figma / Google Maps trackpad conventions.
+ */
+export type PanMode = 'drag' | 'trackpad'
 export type BackgroundStyle = 'cover' | 'ratio' | 'repeat'
 
 /**
