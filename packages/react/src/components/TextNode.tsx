@@ -64,7 +64,12 @@ export function TextNode({
   // additional comfort margin for the body text region itself. Slot-
   // owned content (`body` slot) handles its own padding via the slot
   // region geometry.
-  const LABEL_PAD_X = 10
+  //
+  // When reflow reservations already provide horizontal inset (dashboard
+  // cards with header/footer/topLeft slots), skip the extra body padding
+  // so the title left-aligns with the header text instead of being
+  // indented further.
+  const LABEL_PAD_X = (reservedLeft > 0 || reservedRight > 0) ? 0 : 10
   const LABEL_PAD_Y = 6
 
   // Full node text. Multi-line via `\n` is preserved by `NodeText`'s wrap
