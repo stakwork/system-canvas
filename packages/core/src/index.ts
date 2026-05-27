@@ -40,6 +40,7 @@ export type {
   NodeUpdate,
   EdgeUpdate,
   NodeMenuOption,
+  CollaboratorInfo,
   NodeAction,
   NodeActionGroup,
   // Category slots

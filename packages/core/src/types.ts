@@ -1386,3 +1386,22 @@ export interface NodeMenuOption {
    */
   nodeType: NodeType
 }
+
+// ---------------------------------------------------------------------------
+// Collaboration / presence types
+// ---------------------------------------------------------------------------
+
+/**
+ * Describes a single remote collaborator currently active on the canvas.
+ * Consumed by `CollaboratorsOverlay` for cursor, halo, and conflict-flash
+ * rendering. The library owns zero transport — callers supply this array.
+ */
+export interface CollaboratorInfo {
+  id: string
+  name: string
+  color: string
+  /** Canvas-space cursor position, or null when the collaborator has no cursor. */
+  cursor: { x: number; y: number } | null
+  /** The node id the collaborator currently has selected, if any. */
+  selectedNodeId?: string
+}
