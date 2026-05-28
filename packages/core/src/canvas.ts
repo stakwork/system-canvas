@@ -331,3 +331,42 @@ export function removeEdge(canvas: CanvasData, edgeId: string): CanvasData {
   const edges = (canvas.edges ?? []).filter((e) => e.id !== edgeId)
   return { ...canvas, edges }
 }
+/**
+ * Returns only the nodes that intersect the current viewport (canvas-space),
+ * expanded by `margin` pixels on every side so nodes fade in before they
+ * reach the visible edge.
+ *
+ * Groups use a full-rect intersection so a large group whose top-left corner
+ * is off-screen is never culled while its interior (and children) remain
+ * visible.
+ *
+ * Returns the input array unchanged when it is empty or when
+ * `containerWidth`/`containerHeight` are zero (not yet measured).
+ *
+ * @param nodes            Resolved nodes, including any drag/resize overrides.
+ * @param viewport         d3-zoom transform { x, y, zoom }.
+ * @param containerWidth   Screen width of the SVG container in px.
+ * @param containerHeight  Screen height of the SVG container in px.
+ * @param margin           Extra canvas-space buffer beyond the viewport edges (default 200 px).
+ */
+export function cullNodes(
+  nodes: ResolvedNode[],
+  viewport: { x: number; y: number; zoom: number },
+  containerWidth: number,
+  containerHeight: number,
+  margin = 200,
+): ResolvedNode[] {
+  if (nodes.length === 0) return nodes
+  if (containerWidth <= 0 || containerHeight <= 0) return nodes
+
+  const { x: vx, y: vy, zoom } = viewport
+  // Convert screen bounds to canvas space, then expand by margin.
+  const left   = (-vx / zoom) - margin
+  const top    = (-vy / zoom) - margin
+  const right  = ((containerWidth  - vx) / zoom) + margin
+  const bottom = ((containerHeight - vy) / zoom) + margin
+
+  return nodes.filter(
+    (n) => n.x < right && n.x + n.width > left && n.y < bottom && n.y + n.height > top
+  )
+}
