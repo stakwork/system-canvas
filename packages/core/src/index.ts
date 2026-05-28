@@ -191,6 +191,7 @@ export {
   addEdge,
   updateEdge,
   removeEdge,
+  cullNodes,
 } from './canvas.js'
 
 export { snapToGrid } from './grid.js'

@@ -20,7 +20,7 @@ import type {
   NodeUpdate,
   EdgeUpdate,
 } from 'system-canvas'
-import { computeEdgeMidpoint, screenToCanvas, buildParallelEdgeGroups } from 'system-canvas'
+import { computeEdgeMidpoint, screenToCanvas, buildParallelEdgeGroups, cullNodes } from 'system-canvas'
 import { useViewport } from '../hooks/useViewport.js'
 import { NodeRenderer } from './NodeRenderer.js'
 import { EdgeRenderer } from './EdgeRenderer.js'
@@ -156,6 +156,14 @@ interface ViewportProps {
   dimmedNodeIds?: Set<string>
   /** Node ids that should render with a highlight ring (search match). */
   highlightedNodeIds?: Set<string>
+  /**
+   * Current viewport transform, kept in sync by the parent via React state.
+   * When provided, nodes outside the visible canvas area (plus a margin buffer)
+   * are omitted from the SVG — they are never added to the DOM. Hit-testing
+   * and interaction hooks always operate on the full node list; only the
+   * visual rendering layer is affected.
+   */
+  viewportState?: ViewportState
 }
 
 export interface ViewportHandle {
@@ -228,6 +236,7 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
       alignmentGuides,
       dimmedNodeIds,
       highlightedNodeIds,
+      viewportState,
       autoFit = 'canvas-change',
       canvasRef,
       handoffTransform,
@@ -320,6 +329,23 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
       getCursorScreenPos: () => cursorPosRef.current,
     }))
 
+    // Track SVG container dimensions for viewport culling. Updated lazily
+    // via ResizeObserver; a stale value from the previous frame is acceptable
+    // because the next pan/zoom re-render will pick up the current size.
+    const containerSizeRef = useRef({ w: 0, h: 0 })
+    useEffect(() => {
+      const el = svgRef.current
+      if (!el) return
+      // Seed immediately so the first render has non-zero dimensions.
+      containerSizeRef.current = { w: el.clientWidth, h: el.clientHeight }
+      const ro = new ResizeObserver(([entry]) => {
+        const r = entry.contentRect
+        containerSizeRef.current = { w: r.width, h: r.height }
+      })
+      ro.observe(el)
+      return () => ro.disconnect()
+    }, [])
+
     // Apply drag + resize overrides to nodes before rendering so edges route correctly.
     const renderNodes = useMemo(() => {
       const hasDrag = dragOverrides && dragOverrides.size > 0
@@ -345,6 +371,24 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
       }
       return m
     }, [renderNodes, nodeMap, dragOverrides, resizeOverrides])
+
+    // Viewport-culled node list for SVG rendering only. Nodes outside the
+    // visible canvas area are dropped from the DOM entirely, which reduces
+    // slot/accessor computation and SVG paint work on large canvases.
+    //
+    // Culling is skipped when:
+    //   - No viewportState prop is provided (opt-in from parent).
+    //   - Drags or resizes are in-flight — a node being moved may travel
+    //     outside the initial cull bounds before the viewport catches up.
+    //   - Container dimensions haven't been measured yet (first render).
+    const visibleNodes = useMemo(() => {
+      const hasDrag = dragOverrides && dragOverrides.size > 0
+      const hasResize = resizeOverrides && resizeOverrides.size > 0
+      if (!viewportState || hasDrag || hasResize) return renderNodes
+      const { w, h } = containerSizeRef.current
+      if (w <= 0 || h <= 0) return renderNodes
+      return cullNodes(renderNodes, viewportState, w, h)
+    }, [renderNodes, viewportState, dragOverrides, resizeOverrides])
 
     // Keep a ref to the latest nodes so auto-fit effects can read them
     // without taking `nodes` as a dependency (which would re-fit on every edit).
@@ -593,7 +637,7 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
 
           {/* Groups first (behind everything) */}
           <NodeRenderer
-            nodes={renderNodes}
+            nodes={visibleNodes}
             theme={theme}
             onClick={onNodeClick}
             onDoubleClick={onNodeDoubleClick}
@@ -632,7 +676,7 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
 
           {/* Non-group nodes on top (+ resize handles) */}
           <NodeRenderer
-            nodes={renderNodes}
+            nodes={visibleNodes}
             theme={theme}
             onClick={onNodeClick}
             onDoubleClick={onNodeDoubleClick}
@@ -655,7 +699,7 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
               "none" globally; consumers needing clickable reveals can
               opt back in inside a `kind: 'custom'` renderer. */}
           <RevealsLayer
-            nodes={renderNodes}
+            nodes={visibleNodes}
             theme={theme}
             canvases={canvases}
             getViewport={getViewport}

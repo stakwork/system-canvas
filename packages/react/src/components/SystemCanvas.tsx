@@ -1730,6 +1730,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
         alignmentGuides={editable ? alignmentGuides : undefined}
         dimmedNodeIds={dimmedIds}
         highlightedNodeIds={matchingIds}
+        viewportState={collaboratorViewport}
       />
 
       {/* Collaborators overlay — cursors, selection halos, conflict flashes */}
