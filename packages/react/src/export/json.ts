@@ -1,0 +1,53 @@
+import type { CanvasData } from 'system-canvas'
+import { validateCanvas } from 'system-canvas'
+
+/**
+ * Serialises a CanvasData object to a downloadable `.canvas` JSON file.
+ */
+export function exportAsJSON(canvas: CanvasData, filename = 'canvas.canvas'): void {
+  const json = JSON.stringify(canvas, null, 2)
+  const blob = new Blob([json], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+/**
+ * Reads a File, parses it as JSON, and validates it as a CanvasData document.
+ * Throws an Error with a descriptive message on any failure.
+ */
+export function parseCanvasFile(file: File): Promise<CanvasData> {
+  return new Promise<CanvasData>((resolve, reject) => {
+    const reader = new FileReader()
+
+    reader.onload = () => {
+      try {
+        const text = reader.result as string
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(text)
+        } catch {
+          throw new Error('Invalid JSON: file could not be parsed.')
+        }
+
+        const errors = validateCanvas(parsed as CanvasData)
+        if (errors.length > 0) {
+          throw new Error(`Invalid canvas file: ${errors.join('; ')}`)
+        }
+
+        resolve(parsed as CanvasData)
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error(String(err)))
+      }
+    }
+
+    reader.onerror = () => {
+      reject(new Error('Failed to read file.'))
+    }
+
+    reader.readAsText(file)
+  })
+}
