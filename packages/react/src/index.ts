@@ -55,4 +55,6 @@ export type { AlignDirection } from './components/NodeToolbar.js'
 // Re-export everything from core for convenience
 export { CollaboratorsOverlay } from './components/CollaboratorsOverlay.js'
 export type { CollaboratorsOverlayProps } from './components/CollaboratorsOverlay.js'
+export { ExportButton } from './components/ExportButton.js'
+export type { ExportButtonRenderProps } from './components/ExportButton.js'
 export * from 'system-canvas'

@@ -73,6 +73,8 @@ import {
 } from './EdgeContextMenuOverlay.js'
 import { SearchOverlay } from './SearchOverlay.js'
 import { CollaboratorsOverlay } from './CollaboratorsOverlay.js'
+import { ExportButton, type ExportButtonRenderProps } from './ExportButton.js'
+import { exportAsJSON, parseCanvasFile } from '../export/index.js'
 
 export interface SystemCanvasProps {
   /** Canvas data to render */
@@ -272,6 +274,19 @@ export interface SystemCanvasProps {
   renderAddNodeButton?: (props: AddNodeButtonRenderProps) => React.ReactNode
 
   /**
+   * Controls the built-in export button FAB. Defaults to `true`.
+   * Pass `false` to hide it entirely.
+   */
+  showExportButton?: boolean
+  /** Fully replace the default export FAB with a custom renderer. */
+  renderExportButton?: (props: ExportButtonRenderProps) => React.ReactNode
+  /**
+   * Called with a valid parsed `CanvasData` after the user drops a `.canvas`
+   * file onto the viewport. When omitted, drag-and-drop import is disabled.
+   */
+  onImport?: (canvas: CanvasData) => void
+
+  /**
    * Controls the floating toolbar that appears above a selected node in
    * editable mode. Defaults to `true`. Pass `false` to suppress it entirely
    * (consumers can still build their own UI via `onContextMenu`).
@@ -466,6 +481,9 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
       canDropNodeOn,
       onNodeDrop,
       renderAddNodeButton,
+      showExportButton = true,
+      renderExportButton,
+      onImport,
       showNodeToolbar = true,
       renderNodeToolbar,
       theme: themeProp,
@@ -734,6 +752,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [hiddenCategories, setHiddenCategories] = useState<Set<string>>(new Set())
+  const [importError, setImportError] = useState<string | null>(null)
 
   // Proxy ref for the SVG element — declared early so both useMultiSelect,
   // useNodeDrag, and useEdgeCreate can all share it. The `.current` assignment
@@ -1585,6 +1604,11 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
 
   const renderProps: AddNodeButtonRenderProps = { options: menuOptions, addNode, theme }
 
+  const exportRenderProps: ExportButtonRenderProps = {
+    onExportJSON: () => exportAsJSON(currentCanvas),
+    theme,
+  }
+
   // Conflict-flash detection: when a collaborator has a node selected and that
   // node's position changes externally (i.e. a remote update), briefly flash it.
   const prevNodePositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map())
@@ -1638,6 +1662,24 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
       className={`system-canvas ${className ?? ''}`}
       tabIndex={editable ? 0 : -1}
       onKeyDown={handleKeyDown}
+      onDragOver={onImport ? (e) => e.preventDefault() : undefined}
+      onDrop={
+        onImport
+          ? (e) => {
+              e.preventDefault()
+              const file = e.dataTransfer.files?.[0]
+              if (!file) return
+              parseCanvasFile(file)
+                .then((parsed) => {
+                  setImportError(null)
+                  onImport(parsed)
+                })
+                .catch((err: unknown) => {
+                  setImportError(err instanceof Error ? err.message : String(err))
+                })
+            }
+          : undefined
+      }
       style={{
         position: 'relative',
         width: '100%',
@@ -1653,6 +1695,49 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
         theme={theme.breadcrumbs}
         onNavigate={navigateToBreadcrumb}
       />
+
+      {/* Import error toast */}
+      {importError && (
+        <div
+          className="system-canvas-import-error"
+          style={{
+            position: 'absolute',
+            top: 12,
+            left: 12,
+            zIndex: 10,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '6px 10px',
+            background: theme.breadcrumbs.background,
+            borderRadius: 8,
+            color: theme.breadcrumbs.textColor,
+            fontFamily: theme.node.fontFamily,
+            fontSize: 12,
+            backdropFilter: 'blur(8px)',
+            maxWidth: 320,
+          }}
+        >
+          <span style={{ flex: 1 }}>{importError}</span>
+          <button
+            type="button"
+            aria-label="Dismiss"
+            onClick={() => setImportError(null)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'inherit',
+              padding: 0,
+              fontSize: 14,
+              lineHeight: 1,
+              opacity: 0.7,
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {/* Loading indicator */}
       {isLoading && (
@@ -1811,6 +1896,12 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
         (renderAddNodeButton
           ? renderAddNodeButton(renderProps)
           : <AddNodeButton {...renderProps} />)}
+
+      {/* Export FAB — shown in both editable and read-only modes */}
+      {showExportButton &&
+        (renderExportButton
+          ? renderExportButton(exportRenderProps)
+          : <ExportButton {...exportRenderProps} />)}
 
       {/*
        * Declarative node context menu. Renders only when the consumer

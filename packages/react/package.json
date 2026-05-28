@@ -18,6 +18,10 @@
     "./primitives": {
       "types": "./dist/primitives/index.d.ts",
       "import": "./dist/primitives/index.js"
+    },
+    "./export": {
+      "types": "./dist/export/index.d.ts",
+      "import": "./dist/export/index.js"
     }
   },
   "files": [
