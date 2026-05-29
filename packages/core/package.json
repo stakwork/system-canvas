@@ -1,6 +1,6 @@
 {
   "name": "system-canvas",
-  "version": "0.2.24",
+  "version": "0.2.25",
   "description": "Interactive, zoomable SVG diagrams from JSON Canvas documents. Pure TypeScript core with types, themes, edge routing, and viewport math.",
   "license": "MIT",
   "repository": {
