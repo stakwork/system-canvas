@@ -15,6 +15,12 @@ export function cloneForExport(svgEl: SVGSVGElement, bounds: BoundingBox): SVGSV
   clone.setAttribute('width', String(bounds.width * dpr))
   clone.setAttribute('height', String(bounds.height * dpr))
 
+  const zoomGroup = clone.querySelector("g");
+  if (zoomGroup) {
+    zoomGroup.removeAttribute("transform");
+    zoomGroup.style.transform = "";
+  }
+
   clone.querySelectorAll('[data-no-export="true"]').forEach((el) => el.parentNode?.removeChild(el))
 
   return clone
