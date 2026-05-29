@@ -757,6 +757,7 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
               return (
                 <rect
                   key={`halo-${id}`}
+                  data-no-export="true"
                   x={node.x - 3}
                   y={node.y - 3}
                   width={node.width + 6}
@@ -773,40 +774,48 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
 
           {/* Ghost edge preview during edge-creation drag */}
           {pendingEdge && pendingSourceNode && (
-            <PendingEdgeRenderer
-              sourceNode={pendingSourceNode}
-              sourceSide={pendingEdge.sourceSide}
-              cursor={pendingEdge.cursor}
-              targetNode={pendingTargetNode}
-              theme={theme}
-              defaultEdgeStyle={edgeStyle}
-            />
+            <g data-no-export="true">
+              <PendingEdgeRenderer
+                sourceNode={pendingSourceNode}
+                sourceSide={pendingEdge.sourceSide}
+                cursor={pendingEdge.cursor}
+                targetNode={pendingTargetNode}
+                theme={theme}
+                defaultEdgeStyle={edgeStyle}
+              />
+            </g>
           )}
 
           {/* Connection handles on the hovered (or source-during-drag) node */}
           {handlesNode && onConnectionHandlePointerDown && (
-            <ConnectionHandles
-              node={handlesNode}
-              theme={theme}
-              onHandlePointerDown={onConnectionHandlePointerDown}
-              immediate={!!pendingEdge}
-              activeSide={hoveredSide}
-            />
+            <g data-no-export="true">
+              <ConnectionHandles
+                node={handlesNode}
+                theme={theme}
+                onHandlePointerDown={onConnectionHandlePointerDown}
+                immediate={!!pendingEdge}
+                activeSide={hoveredSide}
+              />
+            </g>
           )}
 
           {/* Alignment guides — rendered above all nodes/edges, disappear on drag end */}
           {alignmentGuides && alignmentGuides.length > 0 && (
-            <AlignmentGuidesLayer guides={alignmentGuides} />
+            <g data-no-export="true">
+              <AlignmentGuidesLayer guides={alignmentGuides} />
+            </g>
           )}
 
           {/* Inline editor on top of the edited node */}
           {editingNode && onEditorCommit && onEditorCancel && (
-            <NodeEditor
-              node={editingNode}
-              theme={theme}
-              onCommit={onEditorCommit}
-              onCancel={onEditorCancel}
-            />
+            <g data-no-export="true">
+              <NodeEditor
+                node={editingNode}
+                theme={theme}
+                onCommit={onEditorCommit}
+                onCancel={onEditorCancel}
+              />
+            </g>
           )}
 
           {/* Inline edge label editor at the edge midpoint */}
@@ -814,13 +823,15 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
             editingEdgeMidpoint &&
             onEdgeEditorCommit &&
             onEdgeEditorCancel && (
-              <EdgeLabelEditor
-                initialLabel={editingEdge.label ?? ''}
-                midpoint={editingEdgeMidpoint}
-                theme={theme}
-                onCommit={onEdgeEditorCommit}
-                onCancel={onEdgeEditorCancel}
-              />
+              <g data-no-export="true">
+                <EdgeLabelEditor
+                  initialLabel={editingEdge.label ?? ''}
+                  midpoint={editingEdgeMidpoint}
+                  theme={theme}
+                  onCommit={onEdgeEditorCommit}
+                  onCancel={onEdgeEditorCancel}
+                />
+              </g>
             )}
         </g>
 
@@ -828,6 +839,7 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
             transform group so it doesn't pan/zoom with the canvas content. */}
         {marqueeRect && (
           <rect
+            data-no-export="true"
             x={Math.min(marqueeRect.x1, marqueeRect.x2)}
             y={Math.min(marqueeRect.y1, marqueeRect.y2)}
             width={Math.abs(marqueeRect.x2 - marqueeRect.x1)}

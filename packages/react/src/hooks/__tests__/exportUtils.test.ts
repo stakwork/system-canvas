@@ -147,3 +147,69 @@ describe('parseCanvasFile', () => {
     expect(result).toEqual({})
   })
 })
+
+// ---------------------------------------------------------------------------
+// cloneForExport
+// ---------------------------------------------------------------------------
+
+import { cloneForExport } from '../../export/png.js'
+import type { BoundingBox } from 'system-canvas'
+
+function makeSvgEl(): SVGSVGElement {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  // A normal content rect (should NOT be stripped)
+  const content = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+  content.setAttribute('id', 'content-rect')
+  svg.appendChild(content)
+  // A UI-only element (should be stripped)
+  const uiEl = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+  uiEl.setAttribute('data-no-export', 'true')
+  uiEl.setAttribute('id', 'ui-rect')
+  svg.appendChild(uiEl)
+  // A nested UI-only element inside a group
+  const group = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+  const nested = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+  nested.setAttribute('data-no-export', 'true')
+  nested.setAttribute('id', 'nested-circle')
+  group.appendChild(nested)
+  svg.appendChild(group)
+  return svg as unknown as SVGSVGElement
+}
+
+const testBounds: BoundingBox = { minX: 10, minY: 20, maxX: 410, maxY: 620, width: 400, height: 600 }
+
+describe('cloneForExport', () => {
+  it('sets viewBox from bounds', () => {
+    const svg = makeSvgEl()
+    const clone = cloneForExport(svg, testBounds)
+    expect(clone.getAttribute('viewBox')).toBe('10 20 400 600')
+  })
+
+  it('sets width and height attributes from bounds', () => {
+    const svg = makeSvgEl()
+    const clone = cloneForExport(svg, testBounds)
+    // The values are bounds.width/height * devicePixelRatio; in jsdom dpr = 1
+    expect(clone.getAttribute('width')).toBe('400')
+    expect(clone.getAttribute('height')).toBe('600')
+  })
+
+  it('strips elements with data-no-export="true"', () => {
+    const svg = makeSvgEl()
+    const clone = cloneForExport(svg, testBounds)
+    expect(clone.querySelector('#ui-rect')).toBeNull()
+    expect(clone.querySelector('#nested-circle')).toBeNull()
+  })
+
+  it('does not strip normal content nodes', () => {
+    const svg = makeSvgEl()
+    const clone = cloneForExport(svg, testBounds)
+    expect(clone.querySelector('#content-rect')).not.toBeNull()
+  })
+
+  it('does not mutate the original SVG element', () => {
+    const svg = makeSvgEl()
+    cloneForExport(svg, testBounds)
+    expect(svg.querySelector('#ui-rect')).not.toBeNull()
+    expect(svg.querySelector('#content-rect')).not.toBeNull()
+  })
+})

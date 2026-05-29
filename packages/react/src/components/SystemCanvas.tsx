@@ -74,7 +74,7 @@ import {
 import { SearchOverlay } from './SearchOverlay.js'
 import { CollaboratorsOverlay } from './CollaboratorsOverlay.js'
 import { ExportButton, type ExportButtonRenderProps } from './ExportButton.js'
-import { exportAsJSON, parseCanvasFile } from '../export/index.js'
+import { exportAsJSON, parseCanvasFile, exportAsPNG, copyAsImage } from '../export/index.js'
 
 export interface SystemCanvasProps {
   /** Canvas data to render */
@@ -869,6 +869,23 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // Cmd+Shift+C / Ctrl+Shift+C global listener — copies the current selection (or full
+  // canvas) as a PNG image to the clipboard. Works in both editable and read-only modes.
+  useEffect(() => {
+    const onKey = async (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'c') {
+        e.preventDefault()
+        const svgEl = viewportHandleRef.current?.getSvgElement()
+        if (!svgEl) return
+        const targetNodes =
+          selectedIds.size > 0 ? nodes.filter((n) => selectedIds.has(n.id)) : nodes
+        await copyAsImage(svgEl, targetNodes)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selectedIds, nodes])
+
   // Unified selection-change emission. Watches both id slots and emits
   // a single `CanvasSelection | null` to the consumer whenever the
   // *identity* of the resolved selection changes. Wiring it as an
@@ -1606,6 +1623,10 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
 
   const exportRenderProps: ExportButtonRenderProps = {
     onExportJSON: () => exportAsJSON(currentCanvas),
+    onExportPNG: async () => {
+      const svgEl = viewportHandleRef.current?.getSvgElement()
+      if (svgEl) await exportAsPNG(svgEl, nodes)
+    },
     theme,
   }
 
