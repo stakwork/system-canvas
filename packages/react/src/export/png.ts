@@ -15,6 +15,12 @@ export function cloneForExport(svgEl: SVGSVGElement, bounds: BoundingBox): SVGSV
   clone.setAttribute('width', String(bounds.width * dpr))
   clone.setAttribute('height', String(bounds.height * dpr))
 
+  const zoomGroup = clone.querySelector("g");
+  if (zoomGroup) {
+    zoomGroup.removeAttribute("transform");
+    zoomGroup.style.transform = "";
+  }
+
   clone.querySelectorAll('[data-no-export="true"]').forEach((el) => el.parentNode?.removeChild(el))
 
   return clone
@@ -89,5 +95,14 @@ export async function copyAsImage(svgEl: SVGSVGElement, nodes: ResolvedNode[]): 
 
   const blob = await svgToBlob(clone, bounds.width, bounds.height)
 
-  await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+  } catch {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "canvas.png";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 }
