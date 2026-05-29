@@ -89,5 +89,14 @@ export async function copyAsImage(svgEl: SVGSVGElement, nodes: ResolvedNode[]): 
 
   const blob = await svgToBlob(clone, bounds.width, bounds.height)
 
-  await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+  } catch {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "canvas.png";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 }
