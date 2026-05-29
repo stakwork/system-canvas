@@ -39,6 +39,7 @@
     "d3-selection": "^3.0.0",
     "d3-transition": "^3.0.0",
     "d3-zoom": "^3.0.0",
+    "dom-to-image-more": "^3.7.2",
     "system-canvas": "^0.2.24"
   },
   "peerDependencies": {

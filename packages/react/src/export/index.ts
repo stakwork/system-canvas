@@ -1,3 +1,4 @@
 export * from './utils.js'
 export * from './json.js'
-// png.ts and svg.ts will be re-exported here in future PRs
+export * from './png.js'
+// svg.ts will be re-exported here in a future PR
