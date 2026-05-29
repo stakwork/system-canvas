@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { computeExportBounds } from '../../export/utils.js'
 import { exportAsJSON, parseCanvasFile } from '../../export/json.js'
 import type { ResolvedNode } from 'system-canvas'
@@ -211,5 +211,76 @@ describe('cloneForExport', () => {
     cloneForExport(svg, testBounds)
     expect(svg.querySelector('#ui-rect')).not.toBeNull()
     expect(svg.querySelector('#content-rect')).not.toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// exportAsSVG
+// ---------------------------------------------------------------------------
+
+import { exportAsSVG } from '../../export/svg.js'
+
+describe('exportAsSVG', () => {
+  let capturedSvgString = ''
+  let clickSpy: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    capturedSvgString = ''
+    clickSpy = vi.fn()
+
+    // Capture the SVG string written into the Blob
+    vi.spyOn(globalThis, 'Blob').mockImplementation(function (parts: BlobPart[] | undefined) {
+      capturedSvgString = (parts as string[])[0] ?? ''
+      return { size: capturedSvgString.length, type: 'image/svg+xml' } as Blob
+    } as unknown as typeof Blob)
+
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-svg')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    vi.spyOn(document, 'createElement').mockReturnValue({
+      href: '',
+      download: '',
+      click: clickSpy,
+    } as unknown as HTMLAnchorElement)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('triggers a download (click called)', () => {
+    const svg = makeSvgEl()
+    exportAsSVG(svg as unknown as SVGSVGElement, [makeNode('a', 0, 0, 100, 100)])
+    expect(clickSpy).toHaveBeenCalledOnce()
+  })
+
+  it('produces output starting with <?xml', () => {
+    const svg = makeSvgEl()
+    exportAsSVG(svg as unknown as SVGSVGElement, [makeNode('a', 0, 0, 100, 100)])
+    expect(capturedSvgString).toMatch(/^<\?xml/)
+  })
+
+  it('includes xmlns="http://www.w3.org/2000/svg" in serialised output', () => {
+    const svg = makeSvgEl()
+    exportAsSVG(svg as unknown as SVGSVGElement, [makeNode('a', 0, 0, 100, 100)])
+    expect(capturedSvgString).toContain('xmlns="http://www.w3.org/2000/svg"')
+  })
+
+  it('serialised output does not contain data-no-export elements', () => {
+    const svg = makeSvgEl()
+    exportAsSVG(svg as unknown as SVGSVGElement, [makeNode('a', 0, 0, 100, 100)])
+    expect(capturedSvgString).not.toContain('data-no-export')
+  })
+
+  it('round-trip: serialised SVG string contains viewBox matching computeExportBounds', () => {
+    const nodes = [makeNode('a', 50, 50, 200, 100)]
+    const svg = makeSvgEl()
+    exportAsSVG(svg as unknown as SVGSVGElement, nodes)
+
+    const bounds = computeExportBounds(nodes)
+    // Check the raw serialised string contains the correct viewBox value
+    // (case-insensitive to handle jsdom XMLSerializer attribute casing)
+    expect(capturedSvgString.toLowerCase()).toContain(
+      `viewbox="${bounds.minX} ${bounds.minY} ${bounds.width} ${bounds.height}"`
+    )
   })
 })

@@ -74,7 +74,7 @@ import {
 import { SearchOverlay } from './SearchOverlay.js'
 import { CollaboratorsOverlay } from './CollaboratorsOverlay.js'
 import { ExportButton, type ExportButtonRenderProps } from './ExportButton.js'
-import { exportAsJSON, parseCanvasFile, exportAsPNG, copyAsImage } from '../export/index.js'
+import { exportAsJSON, parseCanvasFile, exportAsPNG, copyAsImage, exportAsSVG } from '../export/index.js'
 
 export interface SystemCanvasProps {
   /** Canvas data to render */
@@ -1626,6 +1626,10 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
     onExportPNG: async () => {
       const svgEl = viewportHandleRef.current?.getSvgElement()
       if (svgEl) await exportAsPNG(svgEl, nodes)
+    },
+    onExportSVG: () => {
+      const svgEl = viewportHandleRef.current?.getSvgElement()
+      if (svgEl) exportAsSVG(svgEl, nodes)
     },
     theme,
   }

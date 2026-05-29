@@ -15,10 +15,14 @@ export function exportAsSVG(
   const bounds = computeExportBounds(nodes, options?.padding)
   const clone = cloneForExport(svgEl, bounds)
 
- 
+  // SVG is resolution-independent — override the dpr-scaled dimensions that
+  // cloneForExport sets (those are correct for PNG rasterisation) with logical
+  // units so Figma, Inkscape, and browsers import the file at the intended size.
   clone.setAttribute('width', String(bounds.width))
   clone.setAttribute('height', String(bounds.height))
 
+  // Ensure correct XML namespace declaration on the root element.
+  // xmlns:xlink is omitted — it was deprecated in SVG 2.0 and is unused here.
   clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
 
   const svgString =
