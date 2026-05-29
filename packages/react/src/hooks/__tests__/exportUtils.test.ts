@@ -1,18 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-
-// dom-to-image-more references bare `Node` at module-load time which is not
-// available as a scope-level global in the jsdom environment Vitest uses.
-// The functions under test (cloneForExport, computeExportBounds, etc.) never
-// call domtoimage, so a stub module is sufficient.
-vi.mock('dom-to-image-more', () => ({
-  default: {
-    toBlob: vi.fn().mockResolvedValue(new Blob()),
-    toPng: vi.fn().mockResolvedValue(''),
-    toJpeg: vi.fn().mockResolvedValue(''),
-    toSvg: vi.fn().mockResolvedValue(''),
-    toPixelData: vi.fn().mockResolvedValue(new Uint8ClampedArray()),
-  },
-}))
 import { computeExportBounds } from '../../export/utils.js'
 import { exportAsJSON, parseCanvasFile } from '../../export/json.js'
 import type { ResolvedNode } from 'system-canvas'

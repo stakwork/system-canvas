@@ -1,5 +1,4 @@
 import type { BoundingBox, ResolvedNode } from 'system-canvas'
-import domtoimage from 'dom-to-image-more'
 import { computeExportBounds } from './utils.js'
 
 /**
@@ -10,19 +9,53 @@ import { computeExportBounds } from './utils.js'
 export function cloneForExport(svgEl: SVGSVGElement, bounds: BoundingBox): SVGSVGElement {
   const clone = svgEl.cloneNode(true) as SVGSVGElement
 
-  // Set viewBox so the export crops to the content area.
   clone.setAttribute('viewBox', `${bounds.minX} ${bounds.minY} ${bounds.width} ${bounds.height}`)
 
-  // Set explicit pixel dimensions scaled by devicePixelRatio for crisp output.
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1
   clone.setAttribute('width', String(bounds.width * dpr))
   clone.setAttribute('height', String(bounds.height * dpr))
 
-  // Strip all UI-only elements in one pass.
-  const noExportEls = clone.querySelectorAll('[data-no-export="true"]')
-  noExportEls.forEach((el) => el.parentNode?.removeChild(el))
+  clone.querySelectorAll('[data-no-export="true"]').forEach((el) => el.parentNode?.removeChild(el))
 
   return clone
+}
+
+/**
+ * Serialises a cleaned SVG clone to a PNG Blob using the native
+ * XMLSerializer → Canvas 2D pipeline. No external dependencies.
+ */
+function svgToBlob(clone: SVGSVGElement, width: number, height: number): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1
+    const px = { w: width * dpr, h: height * dpr }
+
+    const svgString = new XMLSerializer().serializeToString(clone)
+    const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' })
+    const url = URL.createObjectURL(svgBlob)
+
+    const img = new Image()
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const canvas = document.createElement('canvas')
+      canvas.width = px.w
+      canvas.height = px.h
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        reject(new Error('Could not get 2D canvas context'))
+        return
+      }
+      ctx.drawImage(img, 0, 0, px.w, px.h)
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob)
+        else reject(new Error('canvas.toBlob produced null'))
+      }, 'image/png')
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('Failed to load serialized SVG into Image'))
+    }
+    img.src = url
+  })
 }
 
 /**
@@ -36,27 +69,14 @@ export async function exportAsPNG(
   const bounds = computeExportBounds(nodes, options?.padding)
   const clone = cloneForExport(svgEl, bounds)
 
-  // Temporarily attach off-screen so dom-to-image-more can measure it.
-  clone.style.position = 'fixed'
-  clone.style.left = '-9999px'
-  clone.style.top = '0'
-  document.body.appendChild(clone)
+  const blob = await svgToBlob(clone, bounds.width, bounds.height)
 
-  try {
-    const blob = await domtoimage.toBlob(clone, {
-      width: bounds.width,
-      height: bounds.height,
-    })
-
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = options?.filename ?? 'canvas.png'
-    a.click()
-    URL.revokeObjectURL(url)
-  } finally {
-    document.body.removeChild(clone)
-  }
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = options?.filename ?? 'canvas.png'
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 /**
@@ -67,21 +87,7 @@ export async function copyAsImage(svgEl: SVGSVGElement, nodes: ResolvedNode[]): 
   const bounds = computeExportBounds(nodes)
   const clone = cloneForExport(svgEl, bounds)
 
-  clone.style.position = 'fixed'
-  clone.style.left = '-9999px'
-  clone.style.top = '0'
-  document.body.appendChild(clone)
+  const blob = await svgToBlob(clone, bounds.width, bounds.height)
 
-  try {
-    const blob = await domtoimage.toBlob(clone, {
-      width: bounds.width,
-      height: bounds.height,
-    })
-
-    await navigator.clipboard.write([
-      new ClipboardItem({ 'image/png': blob }),
-    ])
-  } finally {
-    document.body.removeChild(clone)
-  }
+  await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
 }
