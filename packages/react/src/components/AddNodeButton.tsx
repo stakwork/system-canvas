@@ -45,10 +45,7 @@ export function AddNodeButton({ options, addNode, theme }: AddNodeButtonProps) {
       ref={rootRef}
       className="system-canvas-add-node"
       style={{
-        position: 'absolute',
-        bottom: 16,
-        right: 16,
-        zIndex: 15,
+        position: 'relative',
         fontFamily: theme.breadcrumbs.fontFamily,
         fontSize: theme.breadcrumbs.fontSize,
         userSelect: 'none',

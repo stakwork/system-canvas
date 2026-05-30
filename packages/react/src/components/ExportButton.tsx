@@ -77,10 +77,7 @@ export function ExportButton({
       ref={rootRef}
       className="system-canvas-export-button"
       style={{
-        position: 'absolute',
-        bottom: 16,
-        right: 68,
-        zIndex: 15,
+        position: 'relative',
         fontFamily: theme.breadcrumbs.fontFamily,
         fontSize: theme.breadcrumbs.fontSize,
         userSelect: 'none',
