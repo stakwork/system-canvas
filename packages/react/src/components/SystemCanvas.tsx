@@ -1684,33 +1684,35 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
   return (
     <div
       ref={containerRef}
-      className={`system-canvas ${className ?? ''}`}
+      className={`system-canvas ${className ?? ""}`}
       tabIndex={editable ? 0 : -1}
       onKeyDown={handleKeyDown}
       onDragOver={onImport ? (e) => e.preventDefault() : undefined}
       onDrop={
         onImport
           ? (e) => {
-              e.preventDefault()
-              const file = e.dataTransfer.files?.[0]
-              if (!file) return
+              e.preventDefault();
+              const file = e.dataTransfer.files?.[0];
+              if (!file) return;
               parseCanvasFile(file)
                 .then((parsed) => {
-                  setImportError(null)
-                  onImport(parsed)
+                  setImportError(null);
+                  onImport(parsed);
                 })
                 .catch((err: unknown) => {
-                  setImportError(err instanceof Error ? err.message : String(err))
-                })
+                  setImportError(
+                    err instanceof Error ? err.message : String(err),
+                  );
+                });
             }
           : undefined
       }
       style={{
-        position: 'relative',
-        width: '100%',
-        height: '100%',
-        overflow: 'hidden',
-        outline: 'none',
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        overflow: "hidden",
+        outline: "none",
         ...style,
       }}
     >
@@ -1726,20 +1728,20 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
         <div
           className="system-canvas-import-error"
           style={{
-            position: 'absolute',
+            position: "absolute",
             top: 12,
             left: 12,
             zIndex: 10,
-            display: 'flex',
-            alignItems: 'center',
+            display: "flex",
+            alignItems: "center",
             gap: 8,
-            padding: '6px 10px',
+            padding: "6px 10px",
             background: theme.breadcrumbs.background,
             borderRadius: 8,
             color: theme.breadcrumbs.textColor,
             fontFamily: theme.node.fontFamily,
             fontSize: 12,
-            backdropFilter: 'blur(8px)',
+            backdropFilter: "blur(8px)",
             maxWidth: 320,
           }}
         >
@@ -1749,10 +1751,10 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
             aria-label="Dismiss"
             onClick={() => setImportError(null)}
             style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: 'inherit',
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "inherit",
               padding: 0,
               fontSize: 14,
               lineHeight: 1,
@@ -1769,17 +1771,17 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
         <div
           className="system-canvas-loading"
           style={{
-            position: 'absolute',
+            position: "absolute",
             top: 12,
             right: 12,
             zIndex: 10,
-            padding: '6px 12px',
+            padding: "6px 12px",
             background: theme.breadcrumbs.background,
             borderRadius: 8,
             color: theme.breadcrumbs.textColor,
             fontFamily: theme.node.fontFamily,
             fontSize: 12,
-            backdropFilter: 'blur(8px)',
+            backdropFilter: "blur(8px)",
           }}
         >
           Loading...
@@ -1826,7 +1828,9 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
         dragOverrides={dragOverrides}
         dropTargetId={dropTargetId}
         resizeOverrides={resizeOverrides}
-        onResizeHandlePointerDown={editable ? onResizeHandlePointerDown : undefined}
+        onResizeHandlePointerDown={
+          editable ? onResizeHandlePointerDown : undefined
+        }
         onEditorCommit={handleEditorCommit}
         onEditorCancel={handleEditorCancel}
         onEdgeEditorCommit={handleEdgeEditorCommit}
@@ -1862,71 +1866,110 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
           getViewport={getViewportState}
           width={containerSize.width}
           height={containerSize.height}
-          pinned={laneHeaders === 'pinned'}
+          pinned={laneHeaders === "pinned"}
         />
       )}
 
       {/* Floating node toolbar — single-node selection */}
-      {editable && showNodeToolbar && selectedIds.size === 1 && selectedResolvedNode && !editingId && (
-        <NodeToolbar
-          node={selectedResolvedNode}
-          theme={theme}
-          onPatch={(update) => {
-            wrappedOnNodeUpdate(selectedResolvedNode.id, update, currentCanvasRef)
-          }}
-          onDelete={() => {
-            wrappedOnNodeDelete(selectedResolvedNode.id, currentCanvasRef)
-            clearSelection()
-          }}
-          getViewport={getViewportState}
-          containerWidth={containerSize.width}
-          containerHeight={containerSize.height}
-          render={renderNodeToolbar}
-        />
-      )}
-
-      {/* Floating multi-select toolbar — 2+ nodes selected */}
-      {editable && showNodeToolbar && selectedIds.size > 1 && !editingId && (() => {
-        const selectedResolvedNodes = Array.from(selectedIds)
-          .map((id) => nodeMap.get(id))
-          .filter((n): n is ResolvedNode => n != null)
-        if (selectedResolvedNodes.length === 0) return null
-        const anchorNode = selectedResolvedNodes[0]
-        return (
+      {editable &&
+        showNodeToolbar &&
+        selectedIds.size === 1 &&
+        selectedResolvedNode &&
+        !editingId && (
           <NodeToolbar
-            node={anchorNode}
-            selectedNodes={selectedResolvedNodes}
+            node={selectedResolvedNode}
             theme={theme}
-            onPatch={() => {}}
-            onMultiPatch={(patch) => {
-              for (const id of selectedIds) {
-                wrappedOnNodeUpdate(id, patch, currentCanvasRef)
-              }
+            onPatch={(update) => {
+              wrappedOnNodeUpdate(
+                selectedResolvedNode.id,
+                update,
+                currentCanvasRef,
+              );
             }}
             onDelete={() => {
-              wrappedOnNodesDelete(Array.from(selectedIds), currentCanvasRef)
-              clearSelection()
+              wrappedOnNodeDelete(selectedResolvedNode.id, currentCanvasRef);
+              clearSelection();
             }}
             getViewport={getViewportState}
             containerWidth={containerSize.width}
             containerHeight={containerSize.height}
-            onAlign={handleAlign}
-            onDistribute={handleDistribute}
+            render={renderNodeToolbar}
           />
-        )
-      })()}
+        )}
 
-      {/* Add-node FAB (editable only) */}
+      {/* Floating multi-select toolbar — 2+ nodes selected */}
       {editable &&
-        (renderAddNodeButton
-          ? renderAddNodeButton(renderProps)
-          : <AddNodeButton {...renderProps} />)}
+        showNodeToolbar &&
+        selectedIds.size > 1 &&
+        !editingId &&
+        (() => {
+          const selectedResolvedNodes = Array.from(selectedIds)
+            .map((id) => nodeMap.get(id))
+            .filter((n): n is ResolvedNode => n != null);
+          if (selectedResolvedNodes.length === 0) return null;
+          const anchorNode = selectedResolvedNodes[0];
+          return (
+            <NodeToolbar
+              node={anchorNode}
+              selectedNodes={selectedResolvedNodes}
+              theme={theme}
+              onPatch={() => {}}
+              onMultiPatch={(patch) => {
+                for (const id of selectedIds) {
+                  wrappedOnNodeUpdate(id, patch, currentCanvasRef);
+                }
+              }}
+              onDelete={() => {
+                wrappedOnNodesDelete(Array.from(selectedIds), currentCanvasRef);
+                clearSelection();
+              }}
+              getViewport={getViewportState}
+              containerWidth={containerSize.width}
+              containerHeight={containerSize.height}
+              onAlign={handleAlign}
+              onDistribute={handleDistribute}
+            />
+          );
+        })()}
 
-      {/* Export FAB — shown in both editable and read-only modes */}
-      {showExportButton &&
-        (renderExportButton
-          ? renderExportButton(exportRenderProps)
-          : <ExportButton {...exportRenderProps} />)}
+      {/* FAB row — add-node + export in a shared flex container so they
+          sit side-by-side regardless of which ones are present, without
+          either component needing to know about the other's width. */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 16,
+          right: 16,
+          display: "flex",
+          flexDirection: "row-reverse",
+          alignItems: "flex-end",
+          gap: 8,
+          zIndex: 15,
+          pointerEvents: "none",
+        }}
+      >
+        {editable &&
+          (renderAddNodeButton ? (
+            <div style={{ pointerEvents: "auto" }}>
+              {renderAddNodeButton(renderProps)}
+            </div>
+          ) : (
+            <div style={{ pointerEvents: "auto" }}>
+              <AddNodeButton {...renderProps} />
+            </div>
+          ))}
+
+        {showExportButton &&
+          (renderExportButton ? (
+            <div style={{ pointerEvents: "auto" }}>
+              {renderExportButton(exportRenderProps)}
+            </div>
+          ) : (
+            <div style={{ pointerEvents: "auto" }}>
+              <ExportButton {...exportRenderProps} />
+            </div>
+          ))}
+      </div>
 
       {/*
        * Declarative node context menu. Renders only when the consumer
@@ -1963,21 +2006,21 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
         hiddenCategories={hiddenCategories}
         onToggleCategory={(cat) =>
           setHiddenCategories((prev) => {
-            const next = new Set(prev)
-            next.has(cat) ? next.delete(cat) : next.add(cat)
-            return next
+            const next = new Set(prev);
+            next.has(cat) ? next.delete(cat) : next.add(cat);
+            return next;
           })
         }
         matchCount={matchingIds.size}
         totalCount={nodes.length}
         onClose={() => {
-          setSearchOpen(false)
-          setSearchQuery('')
-          setHiddenCategories(new Set())
+          setSearchOpen(false);
+          setSearchQuery("");
+          setHiddenCategories(new Set());
         }}
         onPanToMatch={panToFirstMatch}
       />
     </div>
-  )
+  );
   }
 )
