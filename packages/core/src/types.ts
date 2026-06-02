@@ -1432,5 +1432,7 @@ export interface CollaboratorInfo {
   /** Canvas-space cursor position, or null when the collaborator has no cursor. */
   cursor: { x: number; y: number } | null
   /** The node id the collaborator currently has selected, if any. */
-  selectedNodeId?: string
+  selectedNodeId?: string | null
+  /** Avatar image URL, or null/undefined when not available. */
+  image?: string | null
 }

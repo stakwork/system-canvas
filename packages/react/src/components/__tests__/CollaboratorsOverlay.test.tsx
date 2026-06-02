@@ -176,6 +176,48 @@ describe('CollaboratorsOverlay', () => {
     expect(screen.queryByText('GhostUser')).toBeNull()
   })
 
+  it('renders avatar img when collaborator has image URL', () => {
+    const collab: CollaboratorInfo = {
+      id: 'u1',
+      name: 'Alice',
+      color: '#ff0000',
+      cursor: { x: 50, y: 100 },
+      image: 'https://example.com/avatar.jpg',
+    }
+    const { container } = render(
+      <CollaboratorsOverlay
+        collaborators={[collab]}
+        viewport={VIEWPORT}
+        nodeMap={makeNodeMap()}
+        flashNodeIds={new Map()}
+      />
+    )
+    const img = container.querySelector('img[src="https://example.com/avatar.jpg"]')
+    expect(img).not.toBeNull()
+  })
+
+  it('renders initials fallback when collaborator has no image', () => {
+    const collab: CollaboratorInfo = {
+      id: 'u2',
+      name: 'Dave',
+      color: '#0000ff',
+      cursor: { x: 10, y: 20 },
+      image: null,
+    }
+    const { container } = render(
+      <CollaboratorsOverlay
+        collaborators={[collab]}
+        viewport={VIEWPORT}
+        nodeMap={makeNodeMap()}
+        flashNodeIds={new Map()}
+      />
+    )
+    // No img element should be present in the cursor area
+    expect(container.querySelector('img')).toBeNull()
+    // The initial 'D' should be rendered
+    expect(screen.getByText('D')).toBeTruthy()
+  })
+
   it('positions cursor at screen-space coordinates derived from viewport', () => {
     // With VIEWPORT_2X: screen = (cx * 2 + 10, cy * 2 + 20)
     // cursor (50, 100) → screen (110, 220)
