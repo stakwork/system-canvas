@@ -95,6 +95,17 @@ export interface SystemCanvasProps {
   /** Called when navigation occurs */
   onNavigate?: (ref: string) => void
 
+  /**
+   * Controlled (external) navigation. When true, clicking a navigable node's
+   * ref indicator does NOT drill into a sub-canvas internally — it only fires
+   * `onNavigate(ref)` so the host can route however it likes (e.g. open
+   * another top-level document, switch routes). The breadcrumb stack stays at
+   * the root and no sub-canvas is resolved. Use this when a node's `ref`
+   * points at a separate document the host owns rather than an inline
+   * sub-canvas. Defaults to false (internal drill-down).
+   */
+  externalNavigation?: boolean
+
   /** Called when a breadcrumb is clicked */
   onBreadcrumbClick?: (index: number) => void
 
@@ -459,6 +470,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
       canvases,
       rootLabel = 'Home',
       onNavigate,
+      externalNavigation = false,
       onBreadcrumbClick,
       onBreadcrumbsChange,
       onNodeClick,
@@ -1195,6 +1207,12 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
   // child document.
   const handleNavigableNodeClick = useCallback(
     (node: ResolvedNode) => {
+      // Controlled navigation: don't drill internally — just notify the host
+      // with the node's ref so it can route however it likes.
+      if (externalNavigation) {
+        if (node.ref) onNavigate?.(node.ref)
+        return
+      }
       const frame: ParentFrame = {
         parentCanvasRef: currentCanvasRef,
         parentNodeRect: {
@@ -1229,7 +1247,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
         navigateToRef(node)
       }
     },
-    [navigateToRef, currentCanvasRef, zoomNavConfig.enabled]
+    [navigateToRef, currentCanvasRef, zoomNavConfig.enabled, externalNavigation, onNavigate]
   )
 
   // --- Zoom-navigation enter/exit handlers ---
