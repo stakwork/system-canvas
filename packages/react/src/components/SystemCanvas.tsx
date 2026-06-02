@@ -1581,6 +1581,18 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
     [wrappedOnNodeAdd, currentCanvasRef, theme]
   )
 
+  // Fit selected nodes (or all) to viewport — used by keyboard shortcut
+  const fitSelection = useCallback(() => {
+    const handle = viewportHandleRef.current
+    if (!handle) return
+    const all = nodesRef.current ?? []
+    const targets = selectedIds.size > 0
+      ? all.filter(n => selectedIds.has(n.id))
+      : all
+    if (targets.length === 0) return
+    handle.fitToContent(targets, /* animate */ true)
+  }, [selectedIds, nodesRef])
+
   // Keyboard shortcuts — delegated to the dedicated hook for maintainability.
   const handleKeyDown = useKeyboardShortcuts({
     editable,
@@ -1617,6 +1629,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
     setEditingEdgeId,
     setSelectedEdgeId,
     cancelDrag,
+    fitSelection,
   })
 
   const renderProps: AddNodeButtonRenderProps = { options: menuOptions, addNode, theme }

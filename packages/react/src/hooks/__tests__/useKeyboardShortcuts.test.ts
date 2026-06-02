@@ -74,6 +74,7 @@ function makeCallbacks() {
     edgeContextMenuState: null,
     setEdgeContextMenuState: vi.fn(),
     cancelDrag: vi.fn(),
+    fitSelection: vi.fn(),
   }
 }
 
@@ -524,6 +525,66 @@ describe('useKeyboardShortcuts', () => {
       expect(opts.wrappedOnNodeDelete).toHaveBeenCalledWith('g1', undefined)
       expect(opts.clearSelection).toHaveBeenCalled()
       expect(e.preventDefault).toHaveBeenCalled()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Fit selection shortcut — F / Cmd+Shift+F
+  // -------------------------------------------------------------------------
+  describe('fit selection shortcut', () => {
+    it('F with nodes selected calls fitSelection and preventDefault', () => {
+      const fitSelection = vi.fn()
+      const opts = makeOptions({ selectedIds: new Set(['n1']), fitSelection })
+      const { result } = renderHook(() => useKeyboardShortcuts(opts))
+      const e = makeKeyEvent('f')
+      act(() => result.current(e))
+      expect(fitSelection).toHaveBeenCalled()
+      expect(e.preventDefault).toHaveBeenCalled()
+    })
+
+    it('Cmd+Shift+F with nodes selected calls fitSelection', () => {
+      const fitSelection = vi.fn()
+      const opts = makeOptions({ selectedIds: new Set(['n1']), fitSelection })
+      const { result } = renderHook(() => useKeyboardShortcuts(opts))
+      const e = makeKeyEvent('F', { metaKey: true, shiftKey: true })
+      act(() => result.current(e))
+      expect(fitSelection).toHaveBeenCalled()
+    })
+
+    it('F with no selection calls fitSelection (fits all nodes)', () => {
+      const fitSelection = vi.fn()
+      const opts = makeOptions({ selectedIds: new Set(), fitSelection })
+      const { result } = renderHook(() => useKeyboardShortcuts(opts))
+      const e = makeKeyEvent('f')
+      act(() => result.current(e))
+      expect(fitSelection).toHaveBeenCalled()
+    })
+
+    it('F with editable false still calls fitSelection (read-only allowed)', () => {
+      const fitSelection = vi.fn()
+      const opts = makeOptions({ editable: false, fitSelection })
+      const { result } = renderHook(() => useKeyboardShortcuts(opts))
+      const e = makeKeyEvent('f')
+      act(() => result.current(e))
+      expect(fitSelection).toHaveBeenCalled()
+    })
+
+    it('F while editingId is set does not call fitSelection', () => {
+      const fitSelection = vi.fn()
+      const opts = makeOptions({ editingId: 'n1', fitSelection })
+      const { result } = renderHook(() => useKeyboardShortcuts(opts))
+      const e = makeKeyEvent('f')
+      act(() => result.current(e))
+      expect(fitSelection).not.toHaveBeenCalled()
+    })
+
+    it('F while editingEdgeId is set does not call fitSelection', () => {
+      const fitSelection = vi.fn()
+      const opts = makeOptions({ editingEdgeId: 'e1', fitSelection })
+      const { result } = renderHook(() => useKeyboardShortcuts(opts))
+      const e = makeKeyEvent('f')
+      act(() => result.current(e))
+      expect(fitSelection).not.toHaveBeenCalled()
     })
   })
 })
