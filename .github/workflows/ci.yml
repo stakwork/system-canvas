@@ -14,6 +14,9 @@ jobs:
         with:
           node-version: '24'
       - run: npm ci
+      - run: npm run build:core
+      - run: npm run build:react
+      - run: npm run typecheck
       - run: npm run build
 
   test:

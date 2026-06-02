@@ -198,7 +198,7 @@ export function NodeText({
           letterSpacing={uppercase ? 0.8 : 0.2}
           pointerEvents="none"
         >
-          {lines.map((line, i) => (
+          {lines.map((line: string, i: number) => (
             <tspan key={i} x={x} dy={i === 0 ? 0 : lineHeight}>
               {line || ' '}
             </tspan>
