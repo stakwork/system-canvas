@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useId, useState } from 'react'
 import type { ResolvedNode, CanvasTheme } from 'system-canvas'
 
 type Corner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
@@ -50,8 +50,11 @@ export function RefIndicator({
   onNavigate,
 }: RefIndicatorProps) {
   const [hover, setHover] = useState(false)
+  const rawId = useId()
   const iconKind = theme.node.refIndicator.icon
   if (iconKind === 'none') return null
+  // Stable id for the hover-fill clip path (one per indicator instance).
+  const clipId = `sc-ref-clip-${rawId.replace(/:/g, '')}`
   // Resolve the carve size: explicit prop wins, else theme, else default 18.
   const size = sizeProp ?? theme.node.refIndicator.size ?? 18
 
@@ -65,10 +68,15 @@ export function RefIndicator({
   // visually echoes the box's rounding, but keep the arc noticeably tighter
   // than the node's own radius so the carve still reads as a distinct corner
   // rather than a soft scoop. Clamp to half the carve size so it always fits.
-  const isTopCorner = corner === 'top-left' || corner === 'top-right'
-  const nodeRadius = isTopCorner
-    ? theme.group.cornerRadius
-    : node.resolvedCornerRadius
+  //
+  // Match the node's ACTUAL visual rounding: group nodes render with
+  // `theme.group.cornerRadius`, every other node type with its own
+  // `resolvedCornerRadius`. Keying off node type (not corner position) keeps
+  // the carve consistent now that any node can carve any corner via
+  // `refCorner` — a top-right arrow on a text node must echo the text node's
+  // radius, not the (usually larger) group radius.
+  const nodeRadius =
+    node.type === 'group' ? theme.group.cornerRadius : node.resolvedCornerRadius
   const innerR = Math.max(0, Math.min(nodeRadius * 0.64, size / 2))
 
   let squareX: number
@@ -188,13 +196,29 @@ export function RefIndicator({
       onPointerEnter={() => setHover(true)}
       onPointerLeave={() => setHover(false)}
     >
-      {/* Hover fill — inside the carved square, respecting the inner arc */}
+      {/* Hover fill — inside the carved square, respecting the inner arc.
+          Clipped to the node's rounded rect so the fill's outer corner
+          doesn't poke past the node's rounded outline. */}
       {hover && (
-        <path
-          d={hoverPath}
-          fill={hoverFill}
-          pointerEvents="none"
-        />
+        <>
+          <defs>
+            <clipPath id={clipId}>
+              <rect
+                x={nodeX}
+                y={nodeY}
+                width={nodeWidth}
+                height={nodeHeight}
+                rx={nodeRadius}
+              />
+            </clipPath>
+          </defs>
+          <path
+            d={hoverPath}
+            fill={hoverFill}
+            clipPath={`url(#${clipId})`}
+            pointerEvents="none"
+          />
+        </>
       )}
 
       {/* The carved corner stroke — two edges joined by a rounded inner arc */}

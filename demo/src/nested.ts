@@ -17,6 +17,10 @@ import { evenLanes } from 'system-canvas'
  * automatically swaps themes as the user navigates. Zoom into Product and
  * you land in the roadmap with its own palette; zoom back out and you're
  * back in the neutral org view.
+ *
+ * The Product node also sets `refCorner: 'topRight'` to demonstrate the
+ * per-node override of which corner the navigable ref arrow is carved into
+ * (the default is bottom-right) — compare it against the other team nodes.
  */
 
 // ---------------------------------------------------------------------------
@@ -46,6 +50,10 @@ export const nestedRoot: CanvasData = {
       height: 72,
       color: '5',
       ref: 'nested:product',
+      // Per-node override: carve the navigable ref arrow into the TOP-RIGHT
+      // corner instead of the default bottom-right. The other team nodes keep
+      // the default so you can compare the two corners side by side.
+      refCorner: 'topRight',
     },
     {
       id: 'engineering',

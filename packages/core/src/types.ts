@@ -27,6 +27,9 @@ export type BackgroundStyle = 'cover' | 'ratio' | 'repeat'
  * `width` and `height` are optional when a `category` is set — the category's
  * default dimensions (defined in the theme) will be used as fallback.
  */
+/** The four corners a navigable ref indicator can be carved into. */
+export type RefCorner = 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight'
+
 export interface CanvasNode {
   id: string
   type: NodeType
@@ -41,6 +44,14 @@ export interface CanvasNode {
 
   // --- Extension: sub-canvas reference ---
   ref?: string
+  /**
+   * Override which corner the navigable ref indicator is carved into for
+   * this node. When set, it takes priority over the type default and the
+   * automatic collision avoidance (use deliberately — the chosen corner is
+   * honored even if a slot or header occupies it). See also
+   * `CategoryDefinition.refCorner` to set this per category.
+   */
+  refCorner?: RefCorner
 
   // --- Type-specific fields ---
   /** type: 'text' — markdown content */
@@ -173,6 +184,14 @@ export interface CategoryDefinition {
    * on nodes of this category. See `SlotPosition` and `SlotSpec`.
    */
   slots?: CategorySlots
+
+  /**
+   * Override which corner the navigable ref indicator is carved into for
+   * nodes of this category. When set, it takes priority over the type
+   * default and automatic collision avoidance. A per-node `CanvasNode.refCorner`
+   * wins over this.
+   */
+  refCorner?: RefCorner
 
   /**
    * Per-category toolbar override. When present, fully replaces the theme's

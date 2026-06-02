@@ -82,10 +82,17 @@ export function NodeRenderer({
   const common = (node: ResolvedNode) => {
     const slots = getCategorySlots(node, theme)
     const reservations = computeReflowReservations(node, theme, slots)
+    // An explicit corner (per-node, else per-category) wins over the type
+    // default and the automatic collision avoidance — the consumer asked for
+    // this exact corner, so honor it even if a slot/header occupies it.
+    const explicitCorner =
+      node.refCorner ??
+      (node.category ? theme.categories?.[node.category]?.refCorner : undefined)
     // Groups default to top-right; everything else defaults to bottom-right.
     const defaultCorner =
       node.type === 'group' ? 'topRight' : 'bottomRight'
-    const refCorner = pickRefIndicatorCorner(defaultCorner, slots)
+    const refCorner =
+      explicitCorner ?? pickRefIndicatorCorner(defaultCorner, slots)
     return {
       node,
       theme,

@@ -52,7 +52,7 @@ export const midnightTheme: CanvasTheme = {
   breadcrumbs: {
     background: 'rgba(0, 0, 0, 0.95)',
     textColor: '#6b7280',
-    activeColor: '#00ff88',
+    activeColor: '#ffffff',
     separatorColor: '#374151',
     fontFamily: "'JetBrains Mono', monospace",
     fontSize: 11,
