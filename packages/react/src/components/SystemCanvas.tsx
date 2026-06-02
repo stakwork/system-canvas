@@ -1915,9 +1915,8 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
               theme={theme}
               onPatch={() => {}}
               onMultiPatch={(patch) => {
-                for (const id of selectedIds) {
-                  wrappedOnNodeUpdate(id, patch, currentCanvasRef);
-                }
+                const updates = Array.from(selectedIds).map((id) => ({ id, patch }));
+                wrappedOnNodesUpdate(updates, currentCanvasRef);
               }}
               onDelete={() => {
                 wrappedOnNodesDelete(Array.from(selectedIds), currentCanvasRef);
