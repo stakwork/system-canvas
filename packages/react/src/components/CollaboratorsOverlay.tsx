@@ -161,25 +161,73 @@ export function CollaboratorsOverlay({
                 strokeLinejoin="round"
               />
             </svg>
-            {/* Name pill */}
+            {/* Name pill with avatar */}
             <div
               style={{
                 position: 'absolute',
                 top: 18,
                 left: 8,
-                fontSize: 11,
-                lineHeight: '16px',
-                padding: '1px 6px',
-                borderRadius: 8,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
                 background: collab.color,
-                color: '#fff',
+                borderRadius: 8,
+                padding: '1px 4px 1px 2px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
                 whiteSpace: 'nowrap',
                 fontFamily: 'sans-serif',
-                fontWeight: 500,
-                boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
               }}
             >
-              {collab.name}
+              {/* Avatar circle */}
+              <div
+                style={{
+                  width: 16,
+                  height: 16,
+                  borderRadius: '50%',
+                  overflow: 'hidden',
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: collab.image ? 'transparent' : collab.color,
+                }}
+              >
+                {collab.image ? (
+                  <img
+                    src={collab.image}
+                    width={16}
+                    height={16}
+                    style={{ objectFit: 'cover', borderRadius: '50%' }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: 16,
+                      height: 16,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: collab.color,
+                      color: '#fff',
+                      fontSize: 9,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {collab.name ? collab.name[0].toUpperCase() : '?'}
+                  </div>
+                )}
+              </div>
+              {/* Name text */}
+              <span
+                style={{
+                  fontSize: 11,
+                  lineHeight: '16px',
+                  color: '#fff',
+                  fontWeight: 500,
+                }}
+              >
+                {collab.name}
+              </span>
             </div>
           </div>
         )
