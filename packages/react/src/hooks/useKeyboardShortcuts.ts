@@ -54,6 +54,7 @@ interface UseKeyboardShortcutsOptions {
   edgeContextMenuState: EdgeContextMenuOverlayState | null
   setEdgeContextMenuState: (state: EdgeContextMenuOverlayState | null) => void
   cancelDrag: () => void
+  fitSelection?: () => void
 }
 
 export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions) {
@@ -91,10 +92,28 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions) {
     edgeContextMenuState,
     setEdgeContextMenuState,
     cancelDrag,
+    fitSelection,
   } = options
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
+      const meta = e.metaKey
+      const ctrl = e.ctrlKey
+      const shift = e.shiftKey
+      const key = e.key
+
+      // F / Cmd+Shift+F — fit selected nodes (or all if nothing selected)
+      // Runs in read-only mode; blocked while inline-editing a label
+      if (
+        (key === 'f' && !meta && !ctrl && !shift) ||
+        ((meta || ctrl) && shift && key === 'F')
+      ) {
+        if (editingId || editingEdgeId) return
+        e.preventDefault()
+        fitSelection?.()
+        return
+      }
+
       if (!editable) return
 
       // Escape — layered dismissal
@@ -123,11 +142,6 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions) {
 
       // Let the inline editor handle all other keys when active
       if (editingId || editingEdgeId) return
-
-      const meta = e.metaKey
-      const ctrl = e.ctrlKey
-      const shift = e.shiftKey
-      const key = e.key
 
       // Undo / Redo
       if ((meta || ctrl) && !shift && key === 'z') {
@@ -361,6 +375,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions) {
       setSelectedEdgeId,
       setContextMenuState,
       cancelDrag,
+      fitSelection,
     ]
   )
 
