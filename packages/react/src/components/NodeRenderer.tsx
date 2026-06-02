@@ -46,6 +46,8 @@ interface NodeRendererProps {
   dimmedNodeIds?: Set<string>
   /** Nodes that should render with a highlight ring (search match). */
   highlightedNodeIds?: Set<string>
+  /** The single currently-active search match — renders with a stronger stroke than other matches. */
+  activeMatchNodeId?: string
 }
 
 /**
@@ -75,6 +77,7 @@ export function NodeRenderer({
   only,
   dimmedNodeIds,
   highlightedNodeIds,
+  activeMatchNodeId,
 }: NodeRendererProps) {
   const groups = nodes.filter((n) => n.type === 'group')
   const others = nodes.filter((n) => n.type !== 'group')
@@ -133,6 +136,7 @@ export function NodeRenderer({
         groups.map((node) => {
           const isDimmed = dimmedNodeIds?.has(node.id) ?? false
           const isHighlighted = highlightedNodeIds?.has(node.id) ?? false
+          const isActiveMatch = node.id === activeMatchNodeId
           return (
             <g key={node.id} opacity={isDimmed ? 0.15 : 1}>
               {isHighlighted && (
@@ -144,8 +148,8 @@ export function NodeRenderer({
                   rx={6}
                   fill="none"
                   stroke={theme.node.labelColor}
-                  strokeWidth={2}
-                  opacity={0.6}
+                  strokeWidth={isActiveMatch ? 3.5 : 2}
+                  opacity={isActiveMatch ? 1 : 0.6}
                   pointerEvents="none"
                 />
               )}
@@ -159,6 +163,7 @@ export function NodeRenderer({
           const Component = getNodeComponent(node.type)
           const isDimmed = dimmedNodeIds?.has(node.id) ?? false
           const isHighlighted = highlightedNodeIds?.has(node.id) ?? false
+          const isActiveMatch = node.id === activeMatchNodeId
           return (
             <g key={node.id} opacity={isDimmed ? 0.15 : 1}>
               {isHighlighted && (
@@ -170,8 +175,8 @@ export function NodeRenderer({
                   rx={6}
                   fill="none"
                   stroke={theme.node.labelColor}
-                  strokeWidth={2}
-                  opacity={0.6}
+                  strokeWidth={isActiveMatch ? 3.5 : 2}
+                  opacity={isActiveMatch ? 1 : 0.6}
                   pointerEvents="none"
                 />
               )}
