@@ -9,9 +9,10 @@ interface SearchOverlayProps {
   hiddenCategories: Set<string>
   onToggleCategory: (cat: string) => void
   matchCount: number
-  totalCount: number
+  matchIndex: number
+  onNext: () => void
+  onPrev: () => void
   onClose: () => void
-  onPanToMatch: () => void
 }
 
 /**
@@ -28,9 +29,10 @@ export function SearchOverlay({
   hiddenCategories,
   onToggleCategory,
   matchCount,
-  totalCount,
+  matchIndex,
+  onNext,
+  onPrev,
   onClose,
-  onPanToMatch,
 }: SearchOverlayProps) {
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -53,9 +55,12 @@ export function SearchOverlay({
     if (e.key === 'Escape') {
       e.preventDefault()
       onClose()
-    } else if (e.key === 'Enter') {
+    } else if (e.key === 'Enter' || e.key === 'ArrowDown') {
       e.preventDefault()
-      onPanToMatch()
+      onNext()
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      onPrev()
     }
   }
 
@@ -120,19 +125,73 @@ export function SearchOverlay({
           }}
         />
 
-        {/* Match count badge */}
-        {query.length > 0 && (
+        {/* Match navigation */}
+        {query.length > 0 && matchCount > 0 && (
+          <>
+            <button
+              onClick={onPrev}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '2px 3px',
+                display: 'flex',
+                alignItems: 'center',
+                color: textColor,
+                opacity: 0.7,
+                flexShrink: 0,
+              }}
+              title="Previous match (↑)"
+            >
+              <svg width={10} height={10} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                <polyline points="2,7 5,3 8,7" />
+              </svg>
+            </button>
+            <span
+              style={{
+                fontSize: 11,
+                fontFamily,
+                color: textColor,
+                opacity: 0.7,
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}
+            >
+              {matchIndex + 1}/{matchCount}
+            </span>
+            <button
+              onClick={onNext}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '2px 3px',
+                display: 'flex',
+                alignItems: 'center',
+                color: textColor,
+                opacity: 0.7,
+                flexShrink: 0,
+              }}
+              title="Next match (↓)"
+            >
+              <svg width={10} height={10} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                <polyline points="2,3 5,7 8,3" />
+              </svg>
+            </button>
+          </>
+        )}
+        {query.length > 0 && matchCount === 0 && (
           <span
             style={{
               fontSize: 11,
               fontFamily,
               color: textColor,
-              opacity: 0.7,
+              opacity: 0.5,
               whiteSpace: 'nowrap',
               flexShrink: 0,
             }}
           >
-            {matchCount} of {totalCount}
+            No matches
           </span>
         )}
 

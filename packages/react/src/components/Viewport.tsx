@@ -156,6 +156,8 @@ interface ViewportProps {
   dimmedNodeIds?: Set<string>
   /** Node ids that should render with a highlight ring (search match). */
   highlightedNodeIds?: Set<string>
+  /** The single currently-active match node id — renders with a stronger stroke. */
+  activeMatchNodeId?: string
   /**
    * Current viewport transform, kept in sync by the parent via React state.
    * When provided, nodes outside the visible canvas area (plus a margin buffer)
@@ -236,6 +238,7 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
       alignmentGuides,
       dimmedNodeIds,
       highlightedNodeIds,
+      activeMatchNodeId,
       viewportState,
       autoFit = 'canvas-change',
       canvasRef,
@@ -650,6 +653,7 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
             only="groups"
             dimmedNodeIds={dimmedNodeIds}
             highlightedNodeIds={highlightedNodeIds}
+            activeMatchNodeId={activeMatchNodeId}
           />
 
           {/* Edges above groups but below regular nodes — so edges appear
@@ -690,6 +694,7 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
             only="non-groups"
             dimmedNodeIds={dimmedNodeIds}
             highlightedNodeIds={highlightedNodeIds}
+            activeMatchNodeId={activeMatchNodeId}
           />
 
           {/* Category reveals — zoom-gated detail panels attached to

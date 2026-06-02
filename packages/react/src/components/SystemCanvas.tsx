@@ -764,6 +764,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [hiddenCategories, setHiddenCategories] = useState<Set<string>>(new Set())
+  const [searchIndex, setSearchIndex] = useState(0)
   const [importError, setImportError] = useState<string | null>(null)
 
   // Proxy ref for the SVG element — declared early so both useMultiSelect,
@@ -868,13 +869,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
         e.preventDefault()
-        setSearchOpen((prev) => {
-          if (prev) {
-            setSearchQuery('')
-            setHiddenCategories(new Set())
-          }
-          return !prev
-        })
+        setSearchOpen((prev) => !prev)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -1021,11 +1016,19 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
     [nodes, searchQuery, searchOpen, hiddenCategories]
   )
 
-  // Pan camera to the first matching node
-  const panToFirstMatch = useCallback(() => {
-    if (matchingIds.size === 0) return
-    const firstId = matchingIds.values().next().value as string
-    const node = nodesRef.current.find((n) => n.id === firstId)
+  const matchingIdsArray = useMemo(() => Array.from(matchingIds), [matchingIds])
+  const activeMatchId = matchingIdsArray[searchIndex] as string | undefined
+
+  // Reset index whenever the match set changes (query or filter changed)
+  useEffect(() => {
+    setSearchIndex(0)
+  }, [matchingIds])
+
+  // Pan camera to a specific match by index
+  const panToMatch = useCallback((index: number) => {
+    const id = matchingIdsArray[index]
+    if (!id) return
+    const node = nodesRef.current.find((n) => n.id === id)
     const handle = viewportHandleRef.current
     if (!node || !handle) return
     const currentZoom = viewportStateRef.current.zoom
@@ -1033,7 +1036,21 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
       targetZoom: Math.max(currentZoom, 1.5),
       durationMs: 400,
     })
-  }, [matchingIds])
+  }, [matchingIdsArray])
+
+  const goNextMatch = useCallback(() => {
+    if (matchingIdsArray.length === 0) return
+    const next = (searchIndex + 1) % matchingIdsArray.length
+    setSearchIndex(next)
+    panToMatch(next)
+  }, [matchingIdsArray, searchIndex, panToMatch])
+
+  const goPrevMatch = useCallback(() => {
+    if (matchingIdsArray.length === 0) return
+    const prev = (searchIndex - 1 + matchingIdsArray.length) % matchingIdsArray.length
+    setSearchIndex(prev)
+    panToMatch(prev)
+  }, [matchingIdsArray, searchIndex, panToMatch])
 
   // Per-node commit. Used by resize (which only ever moves a single
   // node) and as the fallback path in `commitDragBatch` when the
@@ -1875,6 +1892,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
         alignmentGuides={editable ? alignmentGuides : undefined}
         dimmedNodeIds={dimmedIds}
         highlightedNodeIds={matchingIds}
+        activeMatchNodeId={activeMatchId}
         viewportState={collaboratorViewport}
       />
 
@@ -2042,13 +2060,10 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
           })
         }
         matchCount={matchingIds.size}
-        totalCount={nodes.length}
-        onClose={() => {
-          setSearchOpen(false);
-          setSearchQuery("");
-          setHiddenCategories(new Set());
-        }}
-        onPanToMatch={panToFirstMatch}
+        matchIndex={searchIndex}
+        onNext={goNextMatch}
+        onPrev={goPrevMatch}
+        onClose={() => setSearchOpen(false)}
       />
     </div>
   );

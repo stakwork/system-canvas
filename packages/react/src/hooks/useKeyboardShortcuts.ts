@@ -143,6 +143,11 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions) {
       // Let the inline editor handle all other keys when active
       if (editingId || editingEdgeId) return
 
+      // Let native text inputs (e.g. search overlay) handle their own keys —
+      // bail out for any shortcut that would conflict with text editing.
+      const tag = (e.target as HTMLElement | null)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+
       // Undo / Redo
       if ((meta || ctrl) && !shift && key === 'z') {
         e.preventDefault()
