@@ -399,4 +399,116 @@ describe('CollaboratorsOverlay', () => {
       )
     ).not.toThrow()
   })
+
+  // -------------------------------------------------------------------------
+  // Clip guard
+  // -------------------------------------------------------------------------
+
+  it('renders cursor within bounds when containerWidth/Height are provided', () => {
+    // cursor at canvas (50, 50) with identity viewport → screen (50, 50)
+    // container 200×200 → within [-100, 300] on both axes
+    const collab: CollaboratorInfo = {
+      id: 'u1',
+      name: 'Alice',
+      color: '#ff0000',
+      cursor: { x: 50, y: 50 },
+    }
+    render(
+      <CollaboratorsOverlay
+        collaborators={[collab]}
+        viewport={VIEWPORT}
+        nodeMap={makeNodeMap()}
+        flashNodeIds={new Map()}
+        containerWidth={200}
+        containerHeight={200}
+      />
+    )
+    expect(screen.getAllByText('Alice').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('does not render cursor beyond CLIP_GUARD_MARGIN outside the container', () => {
+    // cursor at canvas (-200, 50) with identity viewport → screen (-200, 50)
+    // -200 < -100 (CLIP_GUARD_MARGIN), so should be clipped
+    const collab: CollaboratorInfo = {
+      id: 'u1',
+      name: 'ClippedUser',
+      color: '#ff0000',
+      cursor: { x: -200, y: 50 },
+    }
+    render(
+      <CollaboratorsOverlay
+        collaborators={[collab]}
+        viewport={VIEWPORT}
+        nodeMap={makeNodeMap()}
+        flashNodeIds={new Map()}
+        containerWidth={200}
+        containerHeight={200}
+      />
+    )
+    expect(screen.queryByText('ClippedUser')).toBeNull()
+  })
+
+  it('renders cursor exactly at -CLIP_GUARD_MARGIN boundary (inclusive)', () => {
+    // cursor at canvas (-100, 50) → screen (-100, 50); -100 is not < -100, so renders
+    const collab: CollaboratorInfo = {
+      id: 'u1',
+      name: 'BoundaryUser',
+      color: '#ff0000',
+      cursor: { x: -100, y: 50 },
+    }
+    render(
+      <CollaboratorsOverlay
+        collaborators={[collab]}
+        viewport={VIEWPORT}
+        nodeMap={makeNodeMap()}
+        flashNodeIds={new Map()}
+        containerWidth={200}
+        containerHeight={200}
+      />
+    )
+    expect(screen.getAllByText('BoundaryUser').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders cursors regardless of position when containerWidth/Height are omitted (backward compat)', () => {
+    // screen position way outside any real container
+    const collab: CollaboratorInfo = {
+      id: 'u1',
+      name: 'FarAwayUser',
+      color: '#ff0000',
+      cursor: { x: 999999, y: 999999 },
+    }
+    render(
+      <CollaboratorsOverlay
+        collaborators={[collab]}
+        viewport={VIEWPORT}
+        nodeMap={makeNodeMap()}
+        flashNodeIds={new Map()}
+        // no containerWidth / containerHeight — defaults to Infinity
+      />
+    )
+    expect(screen.getAllByText('FarAwayUser').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('halo layer is unaffected by container size props', () => {
+    const node = makeNode('node-1', 100, 200, 300, 150)
+    const collab: CollaboratorInfo = {
+      id: 'u2',
+      name: 'HaloUser',
+      color: '#aa00bb',
+      cursor: null,
+      selectedNodeId: 'node-1',
+    }
+    render(
+      <CollaboratorsOverlay
+        collaborators={[collab]}
+        viewport={VIEWPORT}
+        nodeMap={makeNodeMap(node)}
+        flashNodeIds={new Map()}
+        containerWidth={10}
+        containerHeight={10}
+      />
+    )
+    // Halo label still renders even with tiny container
+    expect(screen.getByText('HaloUser')).toBeTruthy()
+  })
 })
