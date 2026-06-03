@@ -460,6 +460,12 @@ export interface SystemCanvasHandle {
    * outside the component (e.g. a collaboration hook tracking the cursor).
    */
   getViewport: () => ViewportState
+  /**
+   * Returns the underlying SVG element used by the canvas viewport.
+   * Lets external collaboration hooks measure the same bounding rect
+   * that d3-zoom uses as its coordinate origin.
+   */
+  getSvgElement: () => SVGSVGElement | null
 }
 
 export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
@@ -751,6 +757,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
         navigateToBreadcrumbRef.current(0)
       },
       getViewport: () => viewportStateRef.current ?? { x: 0, y: 0, zoom: 1 },
+      getSvgElement: () => viewportHandleRef.current?.getSvgElement() ?? null,
     }),
     [forwardedRef]
   )
@@ -1903,6 +1910,8 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
           viewport={collaboratorViewport}
           nodeMap={nodeMap}
           flashNodeIds={flashNodeIds}
+          containerWidth={containerSize.width}
+          containerHeight={containerSize.height}
         />
       ) : null}
 

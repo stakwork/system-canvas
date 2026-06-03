@@ -14,7 +14,14 @@ export interface CollaboratorsOverlayProps {
   viewport: ViewportState
   nodeMap: Map<string, ResolvedNode>
   flashNodeIds: Map<string, number>
+  /** Visible canvas width in px — used by the clip guard. Defaults to Infinity (no clip) for backward compat. */
+  containerWidth?: number
+  /** Visible canvas height in px — used by the clip guard. Defaults to Infinity (no clip) for backward compat. */
+  containerHeight?: number
 }
+
+// px outside the container edge before a cursor is skipped by the clip guard
+const CLIP_GUARD_MARGIN = 100
 
 // ---------------------------------------------------------------------------
 // Keyframe style injection (once per document)
@@ -49,6 +56,8 @@ export function CollaboratorsOverlay({
   viewport,
   nodeMap,
   flashNodeIds,
+  containerWidth = Infinity,
+  containerHeight = Infinity,
 }: CollaboratorsOverlayProps): React.ReactElement | null {
   // Inject keyframes on first render (client-side only)
   const keyframesInjected = useRef(false)
@@ -133,7 +142,15 @@ export function CollaboratorsOverlay({
       {collaborators.map((collab) => {
         if (!collab.cursor) return null
         const screen = canvasToScreen(collab.cursor.x, collab.cursor.y, viewport)
-        // Clip guard: skip cursors well outside visible area
+        // Clip guard: skip cursors well outside the visible area
+        if (
+          screen.x < -CLIP_GUARD_MARGIN ||
+          screen.x > containerWidth + CLIP_GUARD_MARGIN ||
+          screen.y < -CLIP_GUARD_MARGIN ||
+          screen.y > containerHeight + CLIP_GUARD_MARGIN
+        ) {
+          return null
+        }
         return (
           <div
             key={`cursor-${collab.id}`}
