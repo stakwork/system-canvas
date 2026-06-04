@@ -499,7 +499,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
       canDropNodeOn,
       onNodeDrop,
       renderAddNodeButton,
-      showExportButton = true,
+      showExportButton = false,
       renderExportButton,
       onImport,
       showNodeToolbar = true,
