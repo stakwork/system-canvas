@@ -197,7 +197,7 @@ export {
 export { snapToGrid } from './grid.js'
 export { matchesSearch, computeNodeFilter } from './search.js'
 export type { AlignmentGuide } from './alignment.js'
-export { computeAlignmentGuides, alignNodes, distributeNodes } from './alignment.js'
+export { computeAlignmentGuides, alignNodes, distributeNodes, gridNodes } from './alignment.js'
 
 // Convenience theme collection
 import { darkTheme as _dark } from './themes/dark.js'

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { snapToGrid, alignNodes, distributeNodes, computeAlignmentGuides } from 'system-canvas'
+import { snapToGrid, alignNodes, distributeNodes, computeAlignmentGuides, gridNodes } from 'system-canvas'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -223,5 +223,130 @@ describe('computeAlignmentGuides', () => {
     const centerGuide = guides.find(g => g.axis === 'x' && g.kind === 'center')
     expect(centerGuide).toBeDefined()
     expect(centerGuide?.position).toBe(30) // other's centerX
+  })
+})
+
+// ---------------------------------------------------------------------------
+// gridNodes
+// ---------------------------------------------------------------------------
+
+describe('gridNodes', () => {
+  it('returns [] for empty input', () => {
+    expect(gridNodes([])).toEqual([])
+  })
+
+  it('returns [] for single node', () => {
+    expect(gridNodes([rect('a', 0, 0, 100, 50)])).toEqual([])
+  })
+
+  it('2-node input returns patches placing nodes in a 2x1 grid anchored to bounding-box top-left', () => {
+    // Nodes at different positions; origin = (10, 20)
+    const nodes = [
+      rect('a', 10, 20, 100, 50),
+      rect('b', 200, 300, 100, 50),
+    ]
+    const result = gridNodes(nodes, 20)
+    // cols = ceil(sqrt(2)) = 2 => 2x1 grid
+    // sorted by y then x: a(y=20) before b(y=300)
+    // a -> col=0,row=0 => x=10, y=20 (already in place => no patch)
+    // b -> col=1,row=0 => x=10 + 1*(100+20)=130, y=20
+    const byId = Object.fromEntries(result.map(r => [r.id, r.patch]))
+    expect(byId['a']).toBeUndefined()
+    expect(byId['b']).toEqual({ x: 130, y: 20 })
+  })
+
+  it('4-node input forms a 2x2 grid with 20px gap', () => {
+    const nodes = [
+      rect('a', 0,   0,   100, 80),
+      rect('b', 200, 0,   100, 80),
+      rect('c', 0,   200, 100, 80),
+      rect('d', 200, 200, 100, 80),
+    ]
+    const result = gridNodes(nodes, 20)
+    // cols = ceil(sqrt(4)) = 2
+    // sorted reading order: a(0,0), b(200,0), c(0,200), d(200,200)
+    // originX=0, originY=0, maxW=100, maxH=80
+    // a -> col=0,row=0 => (0,0) no change
+    // b -> col=1,row=0 => (120,0)
+    // c -> col=0,row=1 => (0,100)
+    // d -> col=1,row=1 => (120,100)
+    const byId = Object.fromEntries(result.map(r => [r.id, r.patch]))
+    expect(byId['a']).toBeUndefined() // already in place
+    expect(byId['b']).toEqual({ x: 120, y: 0 })
+    expect(byId['c']).toEqual({ x: 0, y: 100 })
+    expect(byId['d']).toEqual({ x: 120, y: 100 })
+  })
+
+  it('sorts nodes in reading order (top-to-bottom, left-to-right) before placement', () => {
+    // Nodes provided in reverse reading order
+    const nodes = [
+      rect('d', 200, 200, 100, 80),
+      rect('c', 0,   200, 100, 80),
+      rect('b', 200, 0,   100, 80),
+      rect('a', 0,   0,   100, 80),
+    ]
+    const result = gridNodes(nodes, 20)
+    // After sort: a,b,c,d — same as previous test
+    const byId = Object.fromEntries(result.map(r => [r.id, r.patch]))
+    expect(byId['b']).toEqual({ x: 120, y: 0 })
+    expect(byId['c']).toEqual({ x: 0, y: 100 })
+    expect(byId['d']).toEqual({ x: 120, y: 100 })
+  })
+
+  it('omits patch for nodes already in correct grid position', () => {
+    // Two nodes already in the correct 2x1 grid with gap=20
+    const nodes = [
+      rect('a', 0,   0, 100, 50),
+      rect('b', 120, 0, 100, 50),
+    ]
+    const result = gridNodes(nodes, 20)
+    // a -> (0,0) no change; b -> (120,0) no change
+    expect(result).toHaveLength(0)
+  })
+
+  it('handles non-square count (6 nodes) with 3 cols x 2 rows', () => {
+    // cols = ceil(sqrt(6)) = 3
+    const nodes = [
+      rect('a', 0, 0,   80, 60),
+      rect('b', 0, 10,  80, 60),
+      rect('c', 0, 20,  80, 60),
+      rect('d', 0, 30,  80, 60),
+      rect('e', 0, 40,  80, 60),
+      rect('f', 0, 50,  80, 60),
+    ]
+    const result = gridNodes(nodes, 20)
+    // originX=0, originY=0, maxW=80, maxH=60, gap=20 => cellW=100, cellH=80
+    // sorted by y: a(y=0),b(y=10),c(y=20),d(y=30),e(y=40),f(y=50)
+    // a -> col=0,row=0 => (0,0)
+    // b -> col=1,row=0 => (100,0)
+    // c -> col=2,row=0 => (200,0)
+    // d -> col=0,row=1 => (0,80)
+    // e -> col=1,row=1 => (100,80)
+    // f -> col=2,row=1 => (200,80)
+    const byId = Object.fromEntries(result.map(r => [r.id, r.patch]))
+    expect(byId['a']).toBeUndefined() // already at (0,0)
+    expect(byId['b']).toEqual({ x: 100, y: 0 })
+    expect(byId['c']).toEqual({ x: 200, y: 0 })
+    expect(byId['d']).toEqual({ x: 0, y: 80 })
+    expect(byId['e']).toEqual({ x: 100, y: 80 })
+    expect(byId['f']).toEqual({ x: 200, y: 80 })
+  })
+
+  it('anchors the grid to the bounding-box top-left (non-zero origin)', () => {
+    const nodes = [
+      rect('a', 500, 300, 60, 40),
+      rect('b', 700, 400, 60, 40),
+      rect('c', 900, 500, 60, 40),
+    ]
+    const result = gridNodes(nodes, 10)
+    // cols = ceil(sqrt(3)) = 2, originX=500, originY=300, maxW=60, maxH=40
+    // sorted: a(y=300), b(y=400), c(y=500)
+    // a -> col=0,row=0 => (500,300)  no change
+    // b -> col=1,row=0 => (500+70,300) = (570,300)
+    // c -> col=0,row=1 => (500, 300+50) = (500,350)
+    const byId = Object.fromEntries(result.map(r => [r.id, r.patch]))
+    expect(byId['a']).toBeUndefined()
+    expect(byId['b']).toEqual({ x: 570, y: 300 })
+    expect(byId['c']).toEqual({ x: 500, y: 350 })
   })
 })

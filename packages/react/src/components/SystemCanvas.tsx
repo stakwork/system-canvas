@@ -40,6 +40,7 @@ import {
   snapToLane,
   alignNodes,
   distributeNodes,
+  gridNodes,
   computeNodeFilter,
 } from 'system-canvas'
 import type { AlignmentGuide } from 'system-canvas'
@@ -1385,6 +1386,14 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
     [selectedIds, nodesRef, wrappedOnNodesUpdate, currentCanvasRef]
   )
 
+  const handleGridLayout = useCallback(() => {
+    const sel = Array.from(selectedIds)
+      .map((id) => nodesRef.current.find((n) => n.id === id))
+      .filter((n): n is ResolvedNode => n != null)
+    const updates = gridNodes(sel)
+    if (updates.length > 0) wrappedOnNodesUpdate(updates, currentCanvasRef)
+  }, [selectedIds, nodesRef, wrappedOnNodesUpdate, currentCanvasRef])
+
   // Declarative node context menu state. `null` = closed; non-null is the
   // open menu's data (filtered items, target node, screen position, the
   // canvas ref the node lives on). Lives here rather than inside
@@ -1449,6 +1458,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
               label: 'Distribute Vertically',
               disabled: canDistribute ? undefined : () => !canDistribute,
             },
+            { id: '__sys_grid__', label: 'Grid Layout' },
           ]
           matched.push(...builtins)
         }
@@ -1498,10 +1508,11 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
       if (itemId === '__sys_align_centerV__') { handleAlign('centerV'); return }
       if (itemId === '__sys_distribute_h__')  { handleDistribute('horizontal'); return }
       if (itemId === '__sys_distribute_v__')  { handleDistribute('vertical');   return }
+      if (itemId === '__sys_grid__')          { handleGridLayout(); return }
       nodeContextMenu?.onSelect(itemId, node, ctx)
     }
     return { items: baseItems, onSelect: wrappedOnSelect }
-  }, [nodeContextMenu, alignDistributeMenu, handleAlign, handleDistribute])
+  }, [nodeContextMenu, alignDistributeMenu, handleAlign, handleDistribute, handleGridLayout])
 
   // Interaction handlers
   const {
@@ -1985,6 +1996,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
               containerHeight={containerSize.height}
               onAlign={handleAlign}
               onDistribute={handleDistribute}
+              onGrid={handleGridLayout}
             />
           );
         })()}

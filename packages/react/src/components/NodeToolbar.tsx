@@ -65,6 +65,8 @@ interface NodeToolbarProps {
   onAlign?: (direction: AlignDirection) => void
   /** Called when a distribute action fires from the multi-select toolbar. */
   onDistribute?: (axis: 'horizontal' | 'vertical') => void
+  /** Called when the grid layout action fires from the multi-select toolbar. */
+  onGrid?: () => void
 }
 
 /**
@@ -94,6 +96,7 @@ export function NodeToolbar({
   onMultiPatch,
   onAlign,
   onDistribute,
+  onGrid,
 }: NodeToolbarProps) {
   const [viewport, setViewport] = useState<ViewportState>(() => getViewport())
 
@@ -245,6 +248,7 @@ export function NodeToolbar({
           onDelete={deleteNode}
           onAlign={onAlign}
           onDistribute={onDistribute}
+          onGrid={onGrid}
         />
       ) : render ? (
         render({ node, theme, patch, deleteNode })
@@ -273,6 +277,7 @@ interface MultiToolbarContentProps {
   onDelete: () => void
   onAlign?: (direction: AlignDirection) => void
   onDistribute?: (axis: 'horizontal' | 'vertical') => void
+  onGrid?: () => void
 }
 
 function MultiToolbarContent({
@@ -282,6 +287,7 @@ function MultiToolbarContent({
   onDelete,
   onAlign,
   onDistribute,
+  onGrid,
 }: MultiToolbarContentProps) {
   // Use the first node as the representative for action resolution.
   const representativeNode = selectedNodes[0]
@@ -455,6 +461,45 @@ function MultiToolbarContent({
                 </button>
               )
             })}
+          </div>
+        </>
+      )}
+
+      {onGrid && (
+        <>
+          <Divider theme={theme} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: BUTTON_GAP }}>
+            <button
+              type="button"
+              title="Grid Layout"
+              onClick={() => onGrid()}
+              onMouseDown={(e) => e.preventDefault()}
+              style={{
+                width: BUTTON_SIZE,
+                height: BUTTON_SIZE,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'transparent',
+                border: `1px solid ${theme.breadcrumbs.separatorColor}`,
+                borderRadius: 6,
+                color: theme.breadcrumbs.textColor,
+                cursor: 'pointer',
+                padding: 0,
+                outline: 'none',
+              }}
+            >
+              <svg width={16} height={16} viewBox="0 0 16 16">
+                <path
+                  d="M 3 3 L 7 3 L 7 7 L 3 7 Z M 9 3 L 13 3 L 13 7 L 9 7 Z M 3 9 L 7 9 L 7 13 L 3 13 Z M 9 9 L 13 9 L 13 13 L 9 13 Z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
           </div>
         </>
       )}

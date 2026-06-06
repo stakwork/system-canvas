@@ -104,6 +104,32 @@ export function alignNodes(
   return result
 }
 
+export function gridNodes(
+  nodes: NodeRect[],
+  gap = 20,
+): { id: string; patch: { x: number; y: number } }[] {
+  if (nodes.length < 2) return []
+
+  const cols = Math.ceil(Math.sqrt(nodes.length))
+  const originX = Math.min(...nodes.map(n => n.x))
+  const originY = Math.min(...nodes.map(n => n.y))
+  const maxW = Math.max(...nodes.map(n => n.width))
+  const maxH = Math.max(...nodes.map(n => n.height))
+
+  // Sort reading-order: top->bottom, left->right by current position
+  const sorted = [...nodes].sort((a, b) => a.y !== b.y ? a.y - b.y : a.x - b.x)
+
+  return sorted.flatMap((n, i) => {
+    const col = i % cols
+    const row = Math.floor(i / cols)
+    const newX = originX + col * (maxW + gap)
+    const newY = originY + row * (maxH + gap)
+    return (newX === n.x && newY === n.y)
+      ? []
+      : [{ id: n.id, patch: { x: newX, y: newY } }]
+  })
+}
+
 export function distributeNodes(
   nodes: NodeRect[],
   axis: 'horizontal' | 'vertical',
