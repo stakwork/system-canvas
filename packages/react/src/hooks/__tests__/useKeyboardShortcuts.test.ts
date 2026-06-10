@@ -73,6 +73,8 @@ function makeCallbacks() {
     setContextMenuState: vi.fn(),
     edgeContextMenuState: null,
     setEdgeContextMenuState: vi.fn(),
+    canvasContextMenuState: null,
+    setCanvasContextMenuState: vi.fn(),
     cancelDrag: vi.fn(),
     fitSelection: vi.fn(),
   }
@@ -119,6 +121,26 @@ describe('useKeyboardShortcuts', () => {
   // Escape — layered dismissal
   // -------------------------------------------------------------------------
   describe('Escape', () => {
+    it('closes canvas context menu first (before node context menu) when open', () => {
+      const opts = makeOptions({
+        canvasContextMenuState: {
+          items: [{ id: 'item-x', label: 'X' }],
+          screenPosition: { x: 0, y: 0 },
+          position: { x: 0, y: 0 },
+          canvasRef: null,
+        },
+        contextMenuState: { items: [], node: {} as CanvasNode, screenPosition: { x: 0, y: 0 }, canvasRef: null },
+        editingId: 'n1',
+        selectedIds: new Set(['n1']),
+      })
+      const { result } = renderHook(() => useKeyboardShortcuts(opts))
+      act(() => result.current(makeKeyEvent('Escape')))
+      expect(opts.setCanvasContextMenuState).toHaveBeenCalledWith(null)
+      expect(opts.setContextMenuState).not.toHaveBeenCalled()
+      expect(opts.setEditingId).not.toHaveBeenCalled()
+      expect(opts.clearSelection).not.toHaveBeenCalled()
+    })
+
     it('closes context menu first when open', () => {
       const opts = makeOptions({
         contextMenuState: { items: [], node: {} as CanvasNode, screenPosition: { x: 0, y: 0 }, canvasRef: null },
