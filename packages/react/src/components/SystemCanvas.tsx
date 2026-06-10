@@ -21,6 +21,8 @@ import type {
   ContextMenuEvent,
   NodeContextMenuConfig,
   EdgeContextMenuConfig,
+  CanvasContextMenuConfig,
+  CanvasContextMenuOverlayState,
   ResolvedNode,
   NodeUpdate,
   EdgeUpdate,
@@ -72,6 +74,7 @@ import {
   EdgeContextMenuOverlay,
   type EdgeContextMenuOverlayState,
 } from './EdgeContextMenuOverlay.js'
+import { CanvasContextMenuOverlay } from './CanvasContextMenuOverlay.js'
 import { SearchOverlay } from './SearchOverlay.js'
 import { CollaboratorsOverlay } from './CollaboratorsOverlay.js'
 import { ExportButton, type ExportButtonRenderProps } from './ExportButton.js'
@@ -179,6 +182,13 @@ export interface SystemCanvasProps {
    * menu appears on edge right-clicks.
    */
   edgeContextMenu?: EdgeContextMenuConfig
+
+  /**
+   * Declarative right-click context menu for empty canvas space. Items are
+   * pre-filtered by the consumer (no per-item `match` predicate). When not
+   * set, right-clicking empty canvas space fires only `onContextMenu`.
+   */
+  canvasContextMenu?: CanvasContextMenuConfig
 
   // --- Editing ---
   /** When true, the canvas becomes editable (add / edit / move / delete). */
@@ -488,6 +498,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
       onSelectionChange,
       nodeContextMenu,
       edgeContextMenu,
+      canvasContextMenu,
       editable = false,
       onNodeAdd,
       onNodeUpdate,
@@ -1406,12 +1417,17 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
   const [edgeContextMenuState, setEdgeContextMenuState] =
     useState<EdgeContextMenuOverlayState | null>(null)
 
+  // Declarative canvas (empty-space) context menu state.
+  const [canvasContextMenuState, setCanvasContextMenuState] =
+    useState<CanvasContextMenuOverlayState | null>(null)
+
   // Reset the open menus whenever the user navigates between canvases. The
   // node/edge they were anchored to may not exist on the new scope; even if
   // they do, the menu's screen position would be stale.
   useEffect(() => {
     setContextMenuState(null)
     setEdgeContextMenuState(null)
+    setCanvasContextMenuState(null)
   }, [currentCanvasRef])
 
   /**
@@ -1488,9 +1504,16 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
           screenPosition: event.screenPosition,
           canvasRef: currentCanvasRef ?? null,
         })
+      } else if (event.type === 'canvas' && canvasContextMenu && canvasContextMenu.items.length > 0) {
+        setCanvasContextMenuState({
+          items: canvasContextMenu.items,
+          screenPosition: event.screenPosition,
+          position: event.position,
+          canvasRef: currentCanvasRef ?? null,
+        })
       }
     },
-    [onContextMenu, nodeContextMenu, edgeContextMenu, currentCanvasRef, alignDistributeMenu, selectedIds]
+    [onContextMenu, nodeContextMenu, edgeContextMenu, canvasContextMenu, currentCanvasRef, alignDistributeMenu, selectedIds]
   )
 
   // Effective context menu config — wraps the consumer's config (if any) and
@@ -1681,6 +1704,8 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
     setEditingId,
     setEditingEdgeId,
     setSelectedEdgeId,
+    canvasContextMenuState,
+    setCanvasContextMenuState,
     cancelDrag,
     fitSelection,
   })
@@ -2063,6 +2088,15 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
           config={edgeContextMenu}
           theme={theme}
           onClose={() => setEdgeContextMenuState(null)}
+        />
+      )}
+
+      {canvasContextMenu && (
+        <CanvasContextMenuOverlay
+          state={canvasContextMenuState}
+          config={canvasContextMenu}
+          theme={theme}
+          onClose={() => setCanvasContextMenuState(null)}
         />
       )}
 

@@ -1390,6 +1390,38 @@ export interface EdgeContextMenuConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Canvas (empty-space) context menu types
+// ---------------------------------------------------------------------------
+
+export interface CanvasContextMenuItem {
+  id: string
+  label: string
+  icon?: string
+  destructive?: boolean
+}
+
+export interface CanvasContextMenuSelectContext {
+  canvasRef: string | null
+  /** Canvas-space coordinates of the right-click (post pan/zoom). */
+  position: { x: number; y: number }
+  /** Viewport-space coordinates for positioning a fixed overlay. */
+  screenPosition: { x: number; y: number }
+}
+
+export interface CanvasContextMenuConfig {
+  items: CanvasContextMenuItem[]
+  onSelect: (itemId: string, ctx: CanvasContextMenuSelectContext) => void
+}
+
+/** Internal overlay state — not exposed to consumers. */
+export interface CanvasContextMenuOverlayState {
+  items: CanvasContextMenuItem[]
+  screenPosition: { x: number; y: number }
+  position: { x: number; y: number }
+  canvasRef: string | null
+}
+
+// ---------------------------------------------------------------------------
 // Editing types
 // ---------------------------------------------------------------------------
 
