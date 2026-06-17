@@ -182,7 +182,14 @@ export function useNodeDrag(options: UseNodeDragOptions): UseNodeDragResult {
         if (st.moving.has(n.id)) continue
         if (x < n.x || x > n.x + n.width) continue
         if (y < n.y || y > n.y + n.height) continue
-        if (cb([st.source], n)) return n.id
+        const movingNodes: CanvasNode[] = [st.source]
+        for (const [id] of st.moving) {
+          if (id !== st.source.id) {
+            const mn = nodesRef.current?.find(r => r.id === id)
+            if (mn) movingNodes.push(mn)
+          }
+        }
+        if (cb(movingNodes, n)) return n.id
         // Topmost rule: if a node is under the pointer but rejected, we
         // still stop here. Otherwise dragging over a non-droppable node
         // would "see through" to a droppable one underneath and the
@@ -262,7 +269,14 @@ export function useNodeDrag(options: UseNodeDragOptions): UseNodeDragResult {
         // Pusher refresh). In that case fall through to a normal drag-end
         // — the user's gesture shouldn't silently vanish.
         if (target && onNodeDropRef.current) {
-          onNodeDropRef.current([st.source], target)
+          const movingNodes: CanvasNode[] = [st.source]
+          for (const [id] of st.moving) {
+            if (id !== st.source.id) {
+              const mn = nodesRef.current?.find(r => r.id === id)
+              if (mn) movingNodes.push(mn)
+            }
+          }
+          onNodeDropRef.current(movingNodes, target)
           stateRef.current = null
           movedRef.current = false
           dropTargetIdRef.current = null
