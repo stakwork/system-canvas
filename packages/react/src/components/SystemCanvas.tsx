@@ -257,9 +257,8 @@ export interface SystemCanvasProps {
    * Self-drop (target id matches any source id) is filtered before this
    * is called — consumers don't need to special-case it.
    *
-   * The signature uses an array (`sources: CanvasNode[]`) with a v1
-   * length-1 invariant so future multi-select drags can extend without
-   * breaking callers. Today the array always has exactly one entry.
+   * `sources[0]` is always the grabbed node. When a multi-selection is
+   * dragged, the array carries the full selection (all moving nodes).
    *
    * Called frequently during drag — keep it cheap (no fetches, no
    * setState). Pure derivation from `source.category` /
