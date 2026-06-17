@@ -57,6 +57,13 @@ export function useMultiSelect(options: UseMultiSelectOptions): UseMultiSelectRe
   // marquees with no key held. We seed the ref to `true` for that mode so the
   // viewport's d3-zoom filter suppresses background pan from the first frame.
   const marqueeActiveRef = useRef(activationKey === 'none')
+  // `pending` = pointer is down on the background and a marquee is *possible*,
+  // but we haven't committed to drawing one yet (no capture, no preventDefault).
+  // `drawing` = the pointer moved past the threshold, so this is a real marquee
+  // drag and we've taken over the gesture. The two-phase split is what keeps a
+  // plain click (down + up, no movement) from being swallowed — critical in
+  // `'none'` mode where the marquee is armed on every background pointerdown.
+  const isPendingRef = useRef(false)
   const isDrawingRef = useRef(false)
   const startScreenRef = useRef<{ x: number; y: number } | null>(null)
   const pointerIdRef = useRef<number | null>(null)
@@ -160,13 +167,14 @@ export function useMultiSelect(options: UseMultiSelectOptions): UseMultiSelectRe
     const onKeyUp = (e: KeyboardEvent) => {
       if (!matchesKey(e)) return
       marqueeActiveRef.current = false
-      // Cancel any in-progress marquee draw cleanly
-      if (isDrawingRef.current) {
-        isDrawingRef.current = false
-        startScreenRef.current = null
-        pointerIdRef.current = null
-        setMarqueeRect(null)
-      }
+                // Cancel any in-progress (or pending) marquee draw cleanly
+                if (isDrawingRef.current || isPendingRef.current) {
+                    isPendingRef.current = false;
+                    isDrawingRef.current = false;
+                    startScreenRef.current = null;
+                    pointerIdRef.current = null;
+                    setMarqueeRect(null);
+                }
     }
 
     container.addEventListener('keydown', onKeyDown)
@@ -227,10 +235,13 @@ export function useMultiSelect(options: UseMultiSelectOptions): UseMultiSelectRe
       const target = e.target as Element | null
       if (target && typeof target.closest === 'function') {
         // Mirror the viewport's d3-zoom filter exclusions: a drag starting on
-        // a node, a resize handle, or a connection handle is that gesture, not
-        // a marquee. Matters most in `'none'` mode where the marquee is always
-        // armed and can't rely on a key being released to defer.
+        // a node, an edge, a resize handle, or a connection handle is that
+        // gesture (select / drag / edit / connect), not a marquee. Matters most
+        // in `'none'` mode where the marquee is always armed and can't rely on a
+        // key being released to defer — without the edge exclusion, a pointerdown
+        // on an edge starts a marquee and swallows the edge's own click.
         if (target.closest('.system-canvas-node')) return
+        if (target.closest('.system-canvas-edge')) return
         if (target.closest('.system-canvas-resize-handles')) return
         if (target.closest('.system-canvas-connection-handles')) return
       }
@@ -242,24 +253,24 @@ export function useMultiSelect(options: UseMultiSelectOptions): UseMultiSelectRe
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
 
+      // Arm a *pending* marquee only. Do NOT capture the pointer, preventDefault,
+      // or stopPropagation here — if this turns out to be a click (no movement),
+      // the event must flow normally to the +button / context menu / edge / the
+      // background-deselect handler. We commit to a real marquee in pointermove
+      // once movement crosses MARQUEE_DRAG_THRESHOLD.
       startScreenRef.current = { x, y }
-      isDrawingRef.current = true
+      isPendingRef.current = true
+      isDrawingRef.current = false
       pointerIdRef.current = e.pointerId
-      setMarqueeRect({ x1: x, y1: y, x2: x, y2: y })
-
-      try {
-        container.setPointerCapture(e.pointerId)
-      } catch {
-        // ignore
-      }
-
-      e.preventDefault()
-      e.stopPropagation()
     }
 
+    // Pixels the pointer must travel before a pending marquee becomes a real
+    // drag. Below this, the gesture is treated as a click and left untouched.
+    const MARQUEE_DRAG_THRESHOLD = 4
+
     const onPointerMove = (e: PointerEvent) => {
-      if (!isDrawingRef.current) return
       if (e.pointerId !== pointerIdRef.current) return
+      if (!isPendingRef.current && !isDrawingRef.current) return
 
       const svg = svgRef.current
       if (!svg) return
@@ -269,12 +280,36 @@ export function useMultiSelect(options: UseMultiSelectOptions): UseMultiSelectRe
       const y = e.clientY - rect.top
       const start = startScreenRef.current!
 
+      // Still pending: promote to a real marquee only once we've moved enough.
+      if (isPendingRef.current && !isDrawingRef.current) {
+        const dx = x - start.x
+        const dy = y - start.y
+        if (Math.hypot(dx, dy) < MARQUEE_DRAG_THRESHOLD) return
+        isPendingRef.current = false
+        isDrawingRef.current = true
+        try {
+          container.setPointerCapture(e.pointerId)
+        } catch {
+          // ignore
+        }
+      }
+
+      e.preventDefault()
       setMarqueeRect({ x1: start.x, y1: start.y, x2: x, y2: y })
     }
 
     const onPointerUp = (e: PointerEvent) => {
-      if (!isDrawingRef.current) return
       if (e.pointerId !== pointerIdRef.current) return
+
+      // Pending but never promoted to a drag → this was a click. Disarm and
+      // bail without touching the event so the click reaches its real target.
+      if (isPendingRef.current && !isDrawingRef.current) {
+        isPendingRef.current = false
+        startScreenRef.current = null
+        pointerIdRef.current = null
+        return
+      }
+      if (!isDrawingRef.current) return
 
       const svg = svgRef.current
       if (!svg) return
@@ -320,6 +355,7 @@ export function useMultiSelect(options: UseMultiSelectOptions): UseMultiSelectRe
 
       setSelectedIds(matched)
       setMarqueeRect(null)
+      isPendingRef.current = false
       isDrawingRef.current = false
       startScreenRef.current = null
       pointerIdRef.current = null
