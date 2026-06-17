@@ -1,6 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import type { ResolvedNode, ViewportState } from 'system-canvas'
+import type { ResolvedNode, ViewportState, MultiSelectKey } from 'system-canvas'
 import { screenToCanvas } from 'system-canvas'
+
+/**
+ * The concrete (non-`'auto'`) marquee activation keys. `SystemCanvas`
+ * resolves `'auto'` against `panMode` before handing the key to this hook,
+ * so the hook never sees `'auto'`.
+ */
+export type ResolvedMultiSelectKey = Exclude<MultiSelectKey, 'auto'>
 
 export interface MarqueeRect {
   x1: number
@@ -15,6 +22,18 @@ interface UseMultiSelectOptions {
   nodesRef: React.RefObject<ResolvedNode[]>
   containerRef: React.RefObject<HTMLElement | null>
   enabled: boolean
+  /**
+   * How the marquee gesture is activated. Resolved (no `'auto'`) by the
+   * caller. Defaults to `'space'` — the historical behavior.
+   *
+   * - `'space' | 'shift' | 'alt' | 'meta'` — hold the key, then a background
+   *   drag draws a marquee; plain drag still pans.
+   * - `'none'` — every background drag draws a marquee (no key). The marquee
+   *   is "always armed": `marqueeActiveRef` is pinned `true`, so the
+   *   viewport's d3-zoom filter suppresses background pan and the gesture is
+   *   handled here instead. Only coherent with `panMode: 'trackpad'`.
+   */
+  activationKey?: ResolvedMultiSelectKey
 }
 
 interface UseMultiSelectResult {
@@ -29,12 +48,15 @@ interface UseMultiSelectResult {
 }
 
 export function useMultiSelect(options: UseMultiSelectOptions): UseMultiSelectResult {
-  const { svgRef, viewport, nodesRef, containerRef, enabled } = options
+  const { svgRef, viewport, nodesRef, containerRef, enabled, activationKey = 'space' } = options
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [marqueeRect, setMarqueeRect] = useState<MarqueeRect | null>(null)
 
-  const marqueeActiveRef = useRef(false)
+  // `'none'` means the marquee is always armed: a plain background drag
+  // marquees with no key held. We seed the ref to `true` for that mode so the
+  // viewport's d3-zoom filter suppresses background pan from the first frame.
+  const marqueeActiveRef = useRef(activationKey === 'none')
   const isDrawingRef = useRef(false)
   const startScreenRef = useRef<{ x: number; y: number } | null>(null)
   const pointerIdRef = useRef<number | null>(null)
@@ -78,40 +100,72 @@ export function useMultiSelect(options: UseMultiSelectOptions): UseMultiSelectRe
   }, [])
 
   // -------------------------------------------------------------------------
-  // Space key — toggle marquee mode
+  // Activation key — hold to arm marquee mode
+  //
+  // For `'space' | 'shift' | 'alt' | 'meta'` the marquee is armed while the
+  // key is held (keydown arms, keyup disarms). For `'none'` the marquee is
+  // always armed (seeded above) and there is no key to listen for, so this
+  // effect is a no-op.
   // -------------------------------------------------------------------------
 
   useEffect(() => {
     if (!enabled) return
+    if (activationKey === 'none') {
+      // Always armed — keep the ref pinned even across re-renders.
+      marqueeActiveRef.current = true
+      return
+    }
     const container = containerRef.current
     if (!container) return
 
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !e.repeat) {
-        // Don't intercept Space when a text input / editor has focus
-        const active = document.activeElement
-        if (
-          active instanceof HTMLInputElement ||
-          active instanceof HTMLTextAreaElement ||
-          (active instanceof HTMLElement && active.isContentEditable)
-        ) {
-          return
-        }
-        e.preventDefault()
-        marqueeActiveRef.current = true
+    // The physical key for the configured activation key. Space is matched on
+    // `e.code` ('Space'); the modifiers are matched on their `e.key` value.
+    const matchesKey = (e: KeyboardEvent): boolean => {
+      switch (activationKey) {
+        case 'space':
+          return e.code === 'Space'
+        case 'shift':
+          return e.key === 'Shift'
+        case 'alt':
+          return e.key === 'Alt'
+        case 'meta':
+          // Meta is Cmd on macOS, the Windows key elsewhere. Ctrl is
+          // intentionally not folded in — it collides with right-click on
+          // macOS and with Cmd/Ctrl+A select-all.
+          return e.key === 'Meta'
+        default:
+          // `'none'` returned early above; this satisfies the type checker.
+          return false
       }
     }
 
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!matchesKey(e) || e.repeat) return
+      // Don't intercept when a text input / editor has focus.
+      const active = document.activeElement
+      if (
+        active instanceof HTMLInputElement ||
+        active instanceof HTMLTextAreaElement ||
+        (active instanceof HTMLElement && active.isContentEditable)
+      ) {
+        return
+      }
+      // Only Space scrolls the page on its own, so only Space needs the
+      // default suppressed; suppressing it for the modifiers would swallow
+      // their normal behavior elsewhere.
+      if (activationKey === 'space') e.preventDefault()
+      marqueeActiveRef.current = true
+    }
+
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
-        marqueeActiveRef.current = false
-        // Cancel any in-progress marquee draw cleanly
-        if (isDrawingRef.current) {
-          isDrawingRef.current = false
-          startScreenRef.current = null
-          pointerIdRef.current = null
-          setMarqueeRect(null)
-        }
+      if (!matchesKey(e)) return
+      marqueeActiveRef.current = false
+      // Cancel any in-progress marquee draw cleanly
+      if (isDrawingRef.current) {
+        isDrawingRef.current = false
+        startScreenRef.current = null
+        pointerIdRef.current = null
+        setMarqueeRect(null)
       }
     }
 
@@ -121,7 +175,7 @@ export function useMultiSelect(options: UseMultiSelectOptions): UseMultiSelectRe
       container.removeEventListener('keydown', onKeyDown)
       container.removeEventListener('keyup', onKeyUp)
     }
-  }, [enabled, containerRef])
+  }, [enabled, containerRef, activationKey])
 
   // -------------------------------------------------------------------------
   // Cmd+A — select all
@@ -172,7 +226,13 @@ export function useMultiSelect(options: UseMultiSelectOptions): UseMultiSelectRe
       if (e.button !== 0) return
       const target = e.target as Element | null
       if (target && typeof target.closest === 'function') {
+        // Mirror the viewport's d3-zoom filter exclusions: a drag starting on
+        // a node, a resize handle, or a connection handle is that gesture, not
+        // a marquee. Matters most in `'none'` mode where the marquee is always
+        // armed and can't rely on a key being released to defer.
         if (target.closest('.system-canvas-node')) return
+        if (target.closest('.system-canvas-resize-handles')) return
+        if (target.closest('.system-canvas-connection-handles')) return
       }
 
       const svg = svgRef.current
