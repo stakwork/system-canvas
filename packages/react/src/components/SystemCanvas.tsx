@@ -17,6 +17,7 @@ import type {
   CollaboratorInfo,
   EdgeStyle,
   PanMode,
+  MultiSelectKey,
   ViewportState,
   ContextMenuEvent,
   NodeContextMenuConfig,
@@ -357,6 +358,26 @@ export interface SystemCanvasProps {
    */
   panMode?: PanMode
   /**
+   * Controls how the marquee (rubber-band) multi-select gesture is activated.
+   * Only relevant in `editable` mode.
+   *
+   * A background drag is a single gesture that can only be ONE of {pan,
+   * marquee}. `panMode` decides the gesture budget for the background; this
+   * prop picks how marquee fits into what's left.
+   *
+   * - `'space'` (held) — background-drag draws a marquee while Space is held;
+   *   plain drag still pans. Works in both pan modes.
+   * - `'shift'` / `'alt'` / `'meta'` — same held-key model, bound to that
+   *   modifier.
+   * - `'none'` — plain background-drag draws a marquee with no key. Only
+   *   coherent with `panMode: 'trackpad'` (scroll pans, so plain drag is
+   *   free). With `panMode: 'drag'` it leaves no drag-to-pan affordance.
+   * - `'auto'` (default) — resolves against `panMode`: `'drag'` → `'space'`
+   *   (the historical default), `'trackpad'` → `'none'` (plain-drag marquees,
+   *   scroll pans).
+   */
+  multiSelectKey?: MultiSelectKey
+  /**
    * Controls when the viewport auto-fits to the visible content.
    *
    * - `'canvas-change'` (default): fit on initial mount and when navigating
@@ -523,6 +544,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
       maxZoom,
       onViewportChange,
       panMode = 'drag',
+      multiSelectKey = 'auto',
       autoFit = 'canvas-change',
       laneHeaders = 'pinned',
       snapToLanes = false,
@@ -794,6 +816,17 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
   // and by lane-header/size tracking below.
   const containerRef = useRef<HTMLDivElement | null>(null)
 
+  // Resolve `multiSelectKey: 'auto'` against the pan mode. In `'drag'` mode
+  // the plain background drag is spent on panning, so marquee needs a held
+  // key (Space) — the historical default. In `'trackpad'` mode scroll pans,
+  // so the plain drag is free to marquee with no key.
+  const resolvedMultiSelectKey =
+    multiSelectKey === 'auto'
+      ? panMode === 'trackpad'
+        ? 'none'
+        : 'space'
+      : multiSelectKey
+
   // Multi-select hook — owns selectedIds, marquee drawing, Cmd+A
   const {
     selectedIds,
@@ -810,6 +843,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
     nodesRef,
     containerRef,
     enabled: editable,
+    activationKey: resolvedMultiSelectKey,
   })
 
   // Mirror selectedIds into a ref so clipboard and drag hooks read latest

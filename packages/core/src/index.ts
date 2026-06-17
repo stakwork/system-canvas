@@ -6,6 +6,7 @@ export type {
   EndShape,
   EdgeStyle,
   PanMode,
+  MultiSelectKey,
   BackgroundStyle,
   CanvasNode,
   CanvasEdge,

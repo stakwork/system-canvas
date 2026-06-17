@@ -19,6 +19,34 @@ export type EdgeStyle = 'bezier' | 'straight' | 'orthogonal'
  *   zooms. Matches Excalidraw / Figma / Google Maps trackpad conventions.
  */
 export type PanMode = 'drag' | 'trackpad'
+
+/**
+ * Controls how the marquee (rubber-band) multi-select gesture is activated.
+ *
+ * A background drag is a single gesture that can only be ONE of {pan,
+ * marquee}. `panMode` decides the gesture budget for the background; this
+ * prop picks how marquee fits into what's left.
+ *
+ * - `'space'` — hold Space, then background-drag draws a marquee; plain
+ *   drag still pans. Works in both pan modes.
+ * - `'shift'` / `'alt'` / `'meta'` — same held-key model, bound to that
+ *   modifier instead of Space.
+ * - `'none'` — plain background-drag draws a marquee with no key. Only
+ *   coherent with `panMode: 'trackpad'` (where scroll provides panning, so
+ *   the plain drag is free). With `panMode: 'drag'` it leaves no way to pan
+ *   except scroll-to-zoom — a documented foot-gun.
+ * - `'auto'` (default) — resolves against `panMode`: `'drag'` → `'space'`
+ *   (backward-compatible default), `'trackpad'` → `'none'` (Figma /
+ *   Excalidraw convention: plain-drag marquees, scroll pans).
+ */
+export type MultiSelectKey =
+  | 'space'
+  | 'shift'
+  | 'alt'
+  | 'meta'
+  | 'none'
+  | 'auto'
+
 export type BackgroundStyle = 'cover' | 'ratio' | 'repeat'
 
 /**
