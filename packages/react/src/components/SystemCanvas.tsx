@@ -1304,6 +1304,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
       }
       const handle = viewportHandleRef.current
       if (handle) {
+        setZoomNavPendingRef(node.ref ?? null)
         handle.zoomToNode(node, () => {
           // Freeze the just-finished transform as the handoff so the
           // sub-canvas renders in-place and then fades in, instead of
@@ -1361,6 +1362,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
   const {
     handleViewportChange: handleZoomNavViewportChange,
     clearCommitting: clearZoomNavCommitting,
+    setPendingNavRef: setZoomNavPendingRef,
   } = useZoomNavigation({
     enabled: zoomNavConfig.enabled,
     config: zoomNavConfig,

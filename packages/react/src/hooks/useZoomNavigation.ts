@@ -218,9 +218,13 @@ export function useZoomNavigation(options: UseZoomNavigationOptions) {
   // continuously changing past threshold. Cleared explicitly by the
   // consumer via clearCommitting() once the handoff has been applied.
   const committingRef = useRef(false)
+  // Lock: when a click-triggered zoom is in flight, restricts enter-commits
+  // to the intended target ref so a bystander node cannot hijack navigation.
+  const pendingNavRefRef = useRef<string | null>(null)
   // Also reset on canvas change as a belt-and-braces fallback.
   useEffect(() => {
     committingRef.current = false
+    pendingNavRefRef.current = null
   }, [currentCanvas])
 
   // Arm exit detection only after the child canvas has, at some point
@@ -407,7 +411,16 @@ export function useZoomNavigation(options: UseZoomNavigationOptions) {
         }
       }
 
-      if (bestCandidate) {
+      if (
+        bestCandidate &&
+        !(
+          pendingNavRefRef.current !== null &&
+          bestCandidate.node.ref !== pendingNavRefRef.current
+        )
+      ) {
+        // Lock guard: if a click-triggered zoom is in flight toward a specific
+        // ref, the condition above skips enter-commit for any other node so a
+        // bystander cannot hijack navigation. Prefetching still runs above.
         const n = bestCandidate.node
         const screen = bestCandidate.screen
         const ref = n.ref as string
@@ -529,7 +542,12 @@ export function useZoomNavigation(options: UseZoomNavigationOptions) {
 
   const clearCommitting = useCallback(() => {
     committingRef.current = false
+    pendingNavRefRef.current = null
   }, [])
 
-  return { handleViewportChange, clearCommitting }
+  const setPendingNavRef = useCallback((ref: string | null) => {
+    pendingNavRefRef.current = ref
+  }, [])
+
+  return { handleViewportChange, clearCommitting, setPendingNavRef }
 }
