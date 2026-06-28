@@ -497,6 +497,17 @@ export interface SystemCanvasHandle {
    * that d3-zoom uses as its coordinate origin.
    */
   getSvgElement: () => SVGSVGElement | null
+  /**
+   * Push a custom entry onto the undo stack. The `backward` callback
+   * fires on Cmd+Z; the `forward` callback fires on Cmd+Shift+Z.
+   * Lets consumers make external side effects (e.g. API mutations)
+   * participate in the same undo timeline as canvas edits.
+   */
+  pushUndoEntry: (entry: {
+    forward: () => void
+    backward: () => void
+    canvasRef?: string
+  }) => void
 }
 
 export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
@@ -742,6 +753,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
   navigateToBreadcrumbRef.current = navigateToBreadcrumb
   const breadcrumbsRef = useRef(breadcrumbs)
   breadcrumbsRef.current = breadcrumbs
+  const pushUndoEntryRef = useRef<SystemCanvasHandle['pushUndoEntry']>(() => {})
 
   // Expose an imperative API for programmatic camera control (tours, etc.)
   useImperativeHandle(
@@ -791,6 +803,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
       },
       getViewport: () => viewportStateRef.current ?? { x: 0, y: 0, zoom: 1 },
       getSvgElement: () => viewportHandleRef.current?.getSvgElement() ?? null,
+      pushUndoEntry: (entry) => pushUndoEntryRef.current(entry),
     }),
     [forwardedRef]
   )
@@ -868,6 +881,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
     wrappedOnEdgeAdd,
     wrappedOnEdgeUpdate,
     wrappedOnEdgeDelete,
+    pushUndoEntry,
     beginBatch,
     endBatch,
     undo,
@@ -888,6 +902,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
     onUndo,
     onRedo,
   })
+  pushUndoEntryRef.current = pushUndoEntry
 
   // Clipboard: Cmd+C / Cmd+V
   useMultiSelectClipboard({
