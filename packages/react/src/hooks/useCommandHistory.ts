@@ -30,6 +30,12 @@ export type CanvasCommand =
       patch: EdgeUpdate
       canvasRef: string | undefined
     }
+  | {
+      type: 'custom'
+      forward: () => void
+      backward: () => void
+      canvasRef: string | undefined
+    }
   | { type: 'batch'; commands: CanvasCommand[] }
 
 // ---------------------------------------------------------------------------
@@ -68,6 +74,11 @@ export interface UseCommandHistoryReturn {
   wrappedOnEdgeAdd: (edge: CanvasEdge, canvasRef: string | undefined) => void
   wrappedOnEdgeUpdate: (id: string, patch: EdgeUpdate, canvasRef: string | undefined) => void
   wrappedOnEdgeDelete: (edgeId: string, canvasRef: string | undefined) => void
+  pushUndoEntry: (entry: {
+    forward: () => void
+    backward: () => void
+    canvasRef?: string
+  }) => void
   beginBatch: () => void
   endBatch: () => void
   undo: () => void
@@ -185,6 +196,9 @@ export function useCommandHistory(
       case 'edge:update':
         onEdgeUpdateRef.current?.(cmd.id, cmd.prev, cmd.canvasRef)
         break
+      case 'custom':
+        cmd.backward()
+        break
       case 'batch':
         // Reverse order for batch undo
         for (let i = cmd.commands.length - 1; i >= 0; i--) {
@@ -227,6 +241,9 @@ export function useCommandHistory(
       case 'edge:update':
         onEdgeUpdateRef.current?.(cmd.id, cmd.patch, cmd.canvasRef)
         break
+      case 'custom':
+        cmd.forward()
+        break
       case 'batch':
         for (const c of cmd.commands) {
           applyForward(c)
@@ -265,6 +282,20 @@ export function useCommandHistory(
     onRedo?.(getCanvasRef(cmd))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, onRedo, maxDepth])
+
+  const pushUndoEntry = useCallback(
+    (entry: { forward: () => void; backward: () => void; canvasRef?: string }) => {
+      if (!enabled) return
+      pushCommand({
+        type: 'custom',
+        forward: entry.forward,
+        backward: entry.backward,
+        canvasRef: entry.canvasRef,
+      })
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [enabled]
+  )
 
   const beginBatch = useCallback(() => {
     if (!enabled) return
@@ -421,6 +452,7 @@ export function useCommandHistory(
     wrappedOnEdgeAdd,
     wrappedOnEdgeUpdate,
     wrappedOnEdgeDelete,
+    pushUndoEntry,
     beginBatch,
     endBatch,
     undo,
