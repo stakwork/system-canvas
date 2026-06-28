@@ -535,6 +535,106 @@ describe('useCommandHistory', () => {
   })
 
   // ---------------------------------------------------------------------------
+  // custom (pushUndoEntry) — inverse calls backward, forward calls forward
+  // ---------------------------------------------------------------------------
+
+  describe('custom (pushUndoEntry) — inverse calls backward, forward calls forward', () => {
+    it('undo custom entry fires backward callback', () => {
+      const cbs = makeCallbacks()
+      const nodesRef = makeNodesRef([])
+      const edgesRef = makeEdgesRef([])
+      const backward = vi.fn()
+      const forward = vi.fn()
+
+      const { result } = renderHook(() =>
+        useCommandHistory({ nodesRef, edgesRef, ...cbs, enabled: true })
+      )
+
+      act(() => result.current.pushUndoEntry({ forward, backward, canvasRef: 'ref1' }))
+      expect(result.current.canUndo).toBe(true)
+
+      act(() => result.current.undo())
+      expect(backward).toHaveBeenCalledOnce()
+      expect(forward).not.toHaveBeenCalled()
+      expect(result.current.canUndo).toBe(false)
+      expect(result.current.canRedo).toBe(true)
+    })
+
+    it('redo custom entry fires forward callback', () => {
+      const cbs = makeCallbacks()
+      const nodesRef = makeNodesRef([])
+      const edgesRef = makeEdgesRef([])
+      const backward = vi.fn()
+      const forward = vi.fn()
+
+      const { result } = renderHook(() =>
+        useCommandHistory({ nodesRef, edgesRef, ...cbs, enabled: true })
+      )
+
+      act(() => result.current.pushUndoEntry({ forward, backward }))
+      act(() => result.current.undo())
+      backward.mockClear()
+
+      act(() => result.current.redo())
+      expect(forward).toHaveBeenCalledOnce()
+      expect(backward).not.toHaveBeenCalled()
+      expect(result.current.canUndo).toBe(true)
+      expect(result.current.canRedo).toBe(false)
+    })
+
+    it('onUndo receives the custom entry canvasRef', () => {
+      const cbs = makeCallbacks()
+      const nodesRef = makeNodesRef([])
+      const edgesRef = makeEdgesRef([])
+
+      const { result } = renderHook(() =>
+        useCommandHistory({ nodesRef, edgesRef, ...cbs, enabled: true })
+      )
+
+      act(() => result.current.pushUndoEntry({ forward: vi.fn(), backward: vi.fn(), canvasRef: 'ws:123' }))
+      act(() => result.current.undo())
+      expect(cbs.onUndo).toHaveBeenCalledWith('ws:123')
+    })
+
+    it('pushUndoEntry is a no-op when disabled', () => {
+      const cbs = makeCallbacks()
+      const nodesRef = makeNodesRef([])
+      const edgesRef = makeEdgesRef([])
+
+      const { result } = renderHook(() =>
+        useCommandHistory({ nodesRef, edgesRef, ...cbs, enabled: false })
+      )
+
+      act(() => result.current.pushUndoEntry({ forward: vi.fn(), backward: vi.fn() }))
+      expect(result.current.canUndo).toBe(false)
+    })
+
+    it('custom entries interleave with node commands', () => {
+      const node = makeNode('n1')
+      const cbs = makeCallbacks()
+      const nodesRef = makeNodesRef([node])
+      const edgesRef = makeEdgesRef([])
+      const backward = vi.fn()
+
+      const { result } = renderHook(() =>
+        useCommandHistory({ nodesRef, edgesRef, ...cbs, enabled: true })
+      )
+
+      act(() => result.current.wrappedOnNodeAdd(node, undefined))
+      act(() => result.current.pushUndoEntry({ forward: vi.fn(), backward }))
+
+      // First undo pops the custom entry
+      act(() => result.current.undo())
+      expect(backward).toHaveBeenCalledOnce()
+      expect(cbs.onNodeDelete).not.toHaveBeenCalled()
+
+      // Second undo pops the node:add
+      act(() => result.current.undo())
+      expect(cbs.onNodeDelete).toHaveBeenCalledWith('n1', undefined)
+    })
+  })
+
+  // ---------------------------------------------------------------------------
   // enabled=false: passthrough, no recording
   // ---------------------------------------------------------------------------
 
