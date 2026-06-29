@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   CanvasData,
   CanvasTheme,
@@ -246,6 +246,8 @@ export function useZoomNavigation(options: UseZoomNavigationOptions) {
 
   // Most-recent pre-fetch in flight, keyed by ref to avoid duplicates.
   const prefetchRef = useRef<Map<string, PrefetchState>>(new Map())
+  const activePrefetchCount = useRef(0)
+  const [isPrefetching, setIsPrefetching] = useState(false)
 
   const prefetch = useCallback(
     (ref: string) => {
@@ -255,6 +257,8 @@ export function useZoomNavigation(options: UseZoomNavigationOptions) {
       if (existing) return // already fetched or in flight
       const state: PrefetchState = { ref, loading: true }
       prefetchRef.current.set(ref, state)
+      activePrefetchCount.current++
+      setIsPrefetching(true)
       onResolveCanvas(ref)
         .then((data) => {
           state.data = data
@@ -263,6 +267,10 @@ export function useZoomNavigation(options: UseZoomNavigationOptions) {
         })
         .catch(() => {
           state.loading = false
+        })
+        .finally(() => {
+          activePrefetchCount.current--
+          if (activePrefetchCount.current === 0) setIsPrefetching(false)
         })
     },
     [canvases, onResolveCanvas, onSeedCanvas]
@@ -549,5 +557,5 @@ export function useZoomNavigation(options: UseZoomNavigationOptions) {
     pendingNavRefRef.current = ref
   }, [])
 
-  return { handleViewportChange, clearCommitting, setPendingNavRef }
+  return { handleViewportChange, clearCommitting, setPendingNavRef, isPrefetching }
 }
