@@ -62,6 +62,94 @@ interface NodeRendererProps {
  *      `<g>` so slot primitives paint above the body but below the ref
  *      indicator and resize handles.
  */
+/**
+ * Memoized per-node render. During zoom animations the viewport changes
+ * on every frame but the node data, theme, and selection state stay
+ * stable — `React.memo`'s default shallow comparison skips re-renders
+ * for those frames, eliminating the most expensive SVG work.
+ *
+ * Slot/reservation/refCorner computations live inside the memo boundary
+ * so they also skip when the inputs are unchanged.
+ */
+const MemoizedNode = React.memo(function MemoizedNode({
+  node,
+  theme,
+  onClick,
+  onDoubleClick,
+  onContextMenu,
+  onNavigate,
+  onPointerDown,
+  isSelected,
+  isEditing,
+  canvases,
+  isDimmed,
+  isHighlighted,
+  isActiveMatch,
+}: {
+  node: ResolvedNode
+  theme: CanvasTheme
+  onClick: (node: ResolvedNode, event: React.MouseEvent) => void
+  onDoubleClick: (node: ResolvedNode, event: React.MouseEvent) => void
+  onContextMenu: (node: ResolvedNode, event: React.MouseEvent) => void
+  onNavigate: (node: ResolvedNode, event: React.MouseEvent) => void
+  onPointerDown?: (node: ResolvedNode, event: React.PointerEvent) => void
+  isSelected: boolean
+  isEditing: boolean
+  canvases?: Record<string, CanvasData>
+  isDimmed: boolean
+  isHighlighted: boolean
+  isActiveMatch: boolean
+}) {
+  const slots = getCategorySlots(node, theme)
+  const reservations = computeReflowReservations(node, theme, slots)
+  const explicitCorner =
+    node.refCorner ??
+    (node.category ? theme.categories?.[node.category]?.refCorner : undefined)
+  const defaultCorner =
+    node.type === 'group' ? 'topRight' : 'bottomRight'
+  const refCorner =
+    explicitCorner ?? pickRefIndicatorCorner(defaultCorner, slots)
+
+  const Component = node.type === 'group' ? GroupNode : getNodeComponent(node.type)
+
+  return (
+    <g opacity={isDimmed ? 0.15 : 1}>
+      {isHighlighted && (
+        <rect
+          x={node.x - 4}
+          y={node.y - 4}
+          width={node.width + 8}
+          height={node.height + 8}
+          rx={6}
+          fill="none"
+          stroke={theme.node.labelColor}
+          strokeWidth={isActiveMatch ? 3.5 : 2}
+          opacity={isActiveMatch ? 1 : 0.6}
+          pointerEvents="none"
+        />
+      )}
+      <Component
+        node={node}
+        theme={theme}
+        onClick={onClick}
+        onDoubleClick={onDoubleClick}
+        onContextMenu={onContextMenu}
+        onNavigate={onNavigate}
+        onPointerDown={onPointerDown}
+        isSelected={isSelected}
+        isEditing={isEditing}
+        slots={slots}
+        canvases={canvases}
+        reservedTop={reservations.top}
+        reservedBottom={reservations.bottom}
+        reservedLeft={reservations.left}
+        reservedRight={reservations.right}
+        refCorner={refCorner}
+      />
+    </g>
+  )
+})
+
 export function NodeRenderer({
   nodes,
   theme,
@@ -82,40 +170,6 @@ export function NodeRenderer({
   const groups = nodes.filter((n) => n.type === 'group')
   const others = nodes.filter((n) => n.type !== 'group')
 
-  const common = (node: ResolvedNode) => {
-    const slots = getCategorySlots(node, theme)
-    const reservations = computeReflowReservations(node, theme, slots)
-    // An explicit corner (per-node, else per-category) wins over the type
-    // default and the automatic collision avoidance — the consumer asked for
-    // this exact corner, so honor it even if a slot/header occupies it.
-    const explicitCorner =
-      node.refCorner ??
-      (node.category ? theme.categories?.[node.category]?.refCorner : undefined)
-    // Groups default to top-right; everything else defaults to bottom-right.
-    const defaultCorner =
-      node.type === 'group' ? 'topRight' : 'bottomRight'
-    const refCorner =
-      explicitCorner ?? pickRefIndicatorCorner(defaultCorner, slots)
-    return {
-      node,
-      theme,
-      onClick,
-      onDoubleClick,
-      onContextMenu,
-      onNavigate,
-      onPointerDown,
-      isSelected: selectedIds?.has(node.id) ?? false,
-      isEditing: editingId === node.id,
-      slots,
-      canvases,
-      reservedTop: reservations.top,
-      reservedBottom: reservations.bottom,
-      reservedLeft: reservations.left,
-      reservedRight: reservations.right,
-      refCorner,
-    }
-  }
-
   // Resize handles only make sense for a single selected node.
   // With multi-select (2+ nodes), resize is disabled.
   const singleSelectedId =
@@ -133,57 +187,44 @@ export function NodeRenderer({
   return (
     <>
       {only !== 'non-groups' &&
-        groups.map((node) => {
-          const isDimmed = dimmedNodeIds?.has(node.id) ?? false
-          const isHighlighted = highlightedNodeIds?.has(node.id) ?? false
-          const isActiveMatch = node.id === activeMatchNodeId
-          return (
-            <g key={node.id} opacity={isDimmed ? 0.15 : 1}>
-              {isHighlighted && (
-                <rect
-                  x={node.x - 4}
-                  y={node.y - 4}
-                  width={node.width + 8}
-                  height={node.height + 8}
-                  rx={6}
-                  fill="none"
-                  stroke={theme.node.labelColor}
-                  strokeWidth={isActiveMatch ? 3.5 : 2}
-                  opacity={isActiveMatch ? 1 : 0.6}
-                  pointerEvents="none"
-                />
-              )}
-              <GroupNode {...common(node)} />
-            </g>
-          )
-        })}
+        groups.map((node) => (
+          <MemoizedNode
+            key={node.id}
+            node={node}
+            theme={theme}
+            onClick={onClick}
+            onDoubleClick={onDoubleClick}
+            onContextMenu={onContextMenu}
+            onNavigate={onNavigate}
+            onPointerDown={onPointerDown}
+            isSelected={selectedIds?.has(node.id) ?? false}
+            isEditing={editingId === node.id}
+            canvases={canvases}
+            isDimmed={dimmedNodeIds?.has(node.id) ?? false}
+            isHighlighted={highlightedNodeIds?.has(node.id) ?? false}
+            isActiveMatch={node.id === activeMatchNodeId}
+          />
+        ))}
 
       {only !== 'groups' &&
-        others.map((node) => {
-          const Component = getNodeComponent(node.type)
-          const isDimmed = dimmedNodeIds?.has(node.id) ?? false
-          const isHighlighted = highlightedNodeIds?.has(node.id) ?? false
-          const isActiveMatch = node.id === activeMatchNodeId
-          return (
-            <g key={node.id} opacity={isDimmed ? 0.15 : 1}>
-              {isHighlighted && (
-                <rect
-                  x={node.x - 4}
-                  y={node.y - 4}
-                  width={node.width + 8}
-                  height={node.height + 8}
-                  rx={6}
-                  fill="none"
-                  stroke={theme.node.labelColor}
-                  strokeWidth={isActiveMatch ? 3.5 : 2}
-                  opacity={isActiveMatch ? 1 : 0.6}
-                  pointerEvents="none"
-                />
-              )}
-              <Component {...common(node)} />
-            </g>
-          )
-        })}
+        others.map((node) => (
+          <MemoizedNode
+            key={node.id}
+            node={node}
+            theme={theme}
+            onClick={onClick}
+            onDoubleClick={onDoubleClick}
+            onContextMenu={onContextMenu}
+            onNavigate={onNavigate}
+            onPointerDown={onPointerDown}
+            isSelected={selectedIds?.has(node.id) ?? false}
+            isEditing={editingId === node.id}
+            canvases={canvases}
+            isDimmed={dimmedNodeIds?.has(node.id) ?? false}
+            isHighlighted={highlightedNodeIds?.has(node.id) ?? false}
+            isActiveMatch={node.id === activeMatchNodeId}
+          />
+        ))}
 
       {renderResizeHandles && (
         <ResizeHandles
