@@ -1378,6 +1378,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
     handleViewportChange: handleZoomNavViewportChange,
     clearCommitting: clearZoomNavCommitting,
     setPendingNavRef: setZoomNavPendingRef,
+    isPrefetching,
   } = useZoomNavigation({
     enabled: zoomNavConfig.enabled,
     config: zoomNavConfig,
@@ -1908,7 +1909,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
       )}
 
       {/* Loading indicator */}
-      {isLoading && (
+      {(isLoading || isPrefetching) && (
         <div
           className="system-canvas-loading"
           style={{
