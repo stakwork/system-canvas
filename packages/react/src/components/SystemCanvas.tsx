@@ -1906,16 +1906,23 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
             top: 12,
             right: 12,
             zIndex: 10,
-            padding: "6px 12px",
+            padding: "6px 10px",
             background: theme.breadcrumbs.background,
             borderRadius: 8,
             color: theme.breadcrumbs.textColor,
             fontFamily: theme.node.fontFamily,
             fontSize: 12,
             backdropFilter: "blur(8px)",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
           }}
         >
-          Loading...
+          <svg width={14} height={14} viewBox="0 0 14 14" style={{ animation: "system-canvas-spin 0.8s linear infinite" }}>
+            <circle cx={7} cy={7} r={5.5} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" opacity={0.25} />
+            <path d="M 12.5 7 A 5.5 5.5 0 0 0 7 1.5" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
+          </svg>
+          <style>{`@keyframes system-canvas-spin { to { transform: rotate(360deg) } }`}</style>
         </div>
       )}
 
