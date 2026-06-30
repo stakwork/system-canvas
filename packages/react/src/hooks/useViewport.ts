@@ -5,6 +5,26 @@ import 'd3-transition' // Extends d3-selection with .transition()
 import type { ViewportState, PanMode, ResolvedNode } from 'system-canvas'
 import { fitToBounds } from 'system-canvas'
 
+/**
+ * Custom ease with slight overshoot then settle — feels spring-like
+ * without a physics dependency. Based on backOut with s=1.2 (softer
+ * than the d3-ease default of 1.70158).
+ */
+function easeOutBack(t: number): number {
+  const s = 1.2
+  const t1 = t - 1
+  return t1 * t1 * ((s + 1) * t1 + s) + 1
+}
+
+/**
+ * Smooth deceleration without overshoot — used for fit-to-content where
+ * overshoot would feel like the camera went too far.
+ */
+function easeOutQuart(t: number): number {
+  const t1 = 1 - t
+  return 1 - t1 * t1 * t1 * t1
+}
+
 interface UseViewportOptions {
   minZoom: number
   maxZoom: number
@@ -169,7 +189,8 @@ export function useViewport(options: UseViewportOptions): UseViewportResult {
     if (animate) {
       select(svg)
         .transition()
-        .duration(400)
+        .duration(500)
+        .ease(easeOutQuart)
         .call(zoomBehaviorRef.current.transform as any, t)
     } else {
       select(svg).call(zoomBehaviorRef.current.transform, t)
@@ -182,7 +203,8 @@ export function useViewport(options: UseViewportOptions): UseViewportResult {
 
     select(svg)
       .transition()
-      .duration(400)
+      .duration(500)
+      .ease(easeOutQuart)
       .call(zoomBehaviorRef.current.transform as any, zoomIdentity)
   }, [])
 
@@ -202,7 +224,8 @@ export function useViewport(options: UseViewportOptions): UseViewportResult {
       if (options?.animate) {
         sel
           .transition()
-          .duration(options.durationMs ?? 300)
+          .duration(options.durationMs ?? 400)
+          .ease(easeOutQuart)
           .call(zoomBehaviorRef.current.transform as any, t)
       } else {
         sel.call(zoomBehaviorRef.current.transform, t)
@@ -250,6 +273,7 @@ export function useViewport(options: UseViewportOptions): UseViewportResult {
       select(svg)
         .transition()
         .duration(options?.durationMs ?? 900)
+        .ease(easeOutBack)
         .call(zoomBehaviorRef.current.transform as any, t)
         .on('end', () => {
           onComplete?.()

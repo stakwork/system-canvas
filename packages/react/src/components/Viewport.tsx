@@ -269,11 +269,6 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
     const fadeRafRef = useRef<number | null>(null)
     const fadeTimeoutRef = useRef<number | null>(null)
 
-    // Snapshot `<g>` used as a cross-fade backdrop so the old canvas
-    // content stays visible while the new canvas fades in on top. Without
-    // it the user sees the dark background flash through at opacity 0.
-    const snapshotRef = useRef<SVGGElement | null>(null)
-
     const triggerFade = useCallback((durationMs: number) => {
       if (durationMs <= 0) return
       const g = groupRef.current
@@ -282,41 +277,20 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
       if (fadeTimeoutRef.current !== null)
         clearTimeout(fadeTimeoutRef.current)
 
-      // Clone the current content into a static snapshot that sits behind
-      // the live group. This provides visual continuity during the swap.
-      if (snapshotRef.current) {
-        snapshotRef.current.remove()
-        snapshotRef.current = null
-      }
-      const snapshot = g.cloneNode(true) as SVGGElement
-      snapshot.removeAttribute('data-testid')
-      snapshot.style.transition = 'none'
-      snapshot.style.opacity = '1'
-      snapshot.style.pointerEvents = 'none'
-      g.parentNode?.insertBefore(snapshot, g)
-      snapshotRef.current = snapshot
+      const easing = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
-      // Fade the live group from 0 → 1 on top of the snapshot.
       g.style.transition = 'none'
       g.style.opacity = '0'
       // eslint-disable-next-line @typescript-eslint/no-unused-expressions
       g.getBoundingClientRect()
 
       fadeRafRef.current = requestAnimationFrame(() => {
-        g.style.transition = `opacity ${durationMs}ms ease-out`
+        g.style.transition = `opacity ${durationMs}ms ${easing}`
         g.style.opacity = '1'
-        // Fade out the snapshot in parallel for a smooth cross-dissolve.
-        if (snapshotRef.current) {
-          snapshotRef.current.style.transition = `opacity ${durationMs}ms ease-in`
-          snapshotRef.current.style.opacity = '0'
-        }
+
         fadeTimeoutRef.current = window.setTimeout(() => {
           g.style.transition = ''
           g.style.opacity = ''
-          if (snapshotRef.current) {
-            snapshotRef.current.remove()
-            snapshotRef.current = null
-          }
           fadeTimeoutRef.current = null
         }, durationMs + 16)
       })
@@ -328,10 +302,6 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
           cancelAnimationFrame(fadeRafRef.current)
         if (fadeTimeoutRef.current !== null)
           clearTimeout(fadeTimeoutRef.current)
-        if (snapshotRef.current) {
-          snapshotRef.current.remove()
-          snapshotRef.current = null
-        }
       }
     }, [])
 
@@ -474,6 +444,9 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
         if (handoffFadeMs > 0) triggerFade(handoffFadeMs)
         onHandoffApplied?.()
         return
+      }
+      if (autoFit === 'canvas-change' && handoffFadeMs > 0) {
+        triggerFade(handoffFadeMs)
       }
       fitNow()
     }, [

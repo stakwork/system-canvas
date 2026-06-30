@@ -579,7 +579,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
       prefetchThreshold: 0.4,
       landingScale: 1.3,
       landingPadding: 0.08,
-      fadeDuration: 216,
+      fadeDuration: 200,
     }
     if (!zoomNavigation) return { enabled: false, ...defaults }
     if (zoomNavigation === true) return { enabled: true, ...defaults }
