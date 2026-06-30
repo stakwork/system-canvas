@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { CanvasData, ResolvedNode, CanvasTheme } from 'system-canvas'
 import {
   computeReflowReservations,
@@ -85,6 +85,7 @@ const MemoizedNode = React.memo(function MemoizedNode({
   isDimmed,
   isHighlighted,
   isActiveMatch,
+  isExiting,
 }: {
   node: ResolvedNode
   theme: CanvasTheme
@@ -99,7 +100,32 @@ const MemoizedNode = React.memo(function MemoizedNode({
   isDimmed: boolean
   isHighlighted: boolean
   isActiveMatch: boolean
+  isExiting?: boolean
 }) {
+  const gRef = useRef<SVGGElement>(null)
+  const mountedRef = useRef(false)
+
+  useEffect(() => {
+    const g = gRef.current
+    if (!g || mountedRef.current) return
+    mountedRef.current = true
+    g.style.opacity = '0'
+    g.style.transition = 'none'
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    g.getBoundingClientRect()
+    requestAnimationFrame(() => {
+      g.style.transition = 'opacity 200ms cubic-bezier(0.22, 1, 0.36, 1)'
+      g.style.opacity = isDimmed ? '0.15' : '1'
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const g = gRef.current
+    if (!g || !isExiting) return
+    g.style.transition = 'opacity 150ms ease-in'
+    g.style.opacity = '0'
+  }, [isExiting])
+
   const slots = getCategorySlots(node, theme)
   const reservations = computeReflowReservations(node, theme, slots)
   const explicitCorner =
@@ -113,7 +139,7 @@ const MemoizedNode = React.memo(function MemoizedNode({
   const Component = node.type === 'group' ? GroupNode : getNodeComponent(node.type)
 
   return (
-    <g opacity={isDimmed ? 0.15 : 1}>
+    <g ref={gRef} opacity={isDimmed ? 0.15 : 1} style={isExiting ? { pointerEvents: 'none' } : undefined}>
       {isHighlighted && (
         <rect
           x={node.x - 4}
@@ -167,8 +193,44 @@ export function NodeRenderer({
   highlightedNodeIds,
   activeMatchNodeId,
 }: NodeRendererProps) {
-  const groups = nodes.filter((n) => n.type === 'group')
-  const others = nodes.filter((n) => n.type !== 'group')
+  const prevNodeMapRef = useRef<Map<string, ResolvedNode>>(new Map())
+  const [exitingNodes, setExitingNodes] = useState<Map<string, ResolvedNode>>(new Map())
+
+  useEffect(() => {
+    const currentIds = new Set(nodes.map((n) => n.id))
+    const removed = new Map<string, ResolvedNode>()
+    for (const [id, node] of prevNodeMapRef.current) {
+      if (!currentIds.has(id)) removed.set(id, node)
+    }
+
+    prevNodeMapRef.current = new Map(nodes.map((n) => [n.id, n]))
+
+    if (removed.size > 0) {
+      setExitingNodes((prev) => {
+        const next = new Map(prev)
+        for (const [id, node] of removed) next.set(id, node)
+        return next
+      })
+      setTimeout(() => {
+        setExitingNodes((prev) => {
+          const next = new Map(prev)
+          for (const id of removed.keys()) next.delete(id)
+          return next
+        })
+      }, 180)
+    }
+  }, [nodes])
+
+  const allNodes = useMemo(() => {
+    if (exitingNodes.size === 0) return nodes
+    const exitArr = Array.from(exitingNodes.values()).filter(
+      (n) => !nodes.some((live) => live.id === n.id)
+    )
+    return [...exitArr, ...nodes]
+  }, [nodes, exitingNodes])
+
+  const groups = allNodes.filter((n) => n.type === 'group')
+  const others = allNodes.filter((n) => n.type !== 'group')
 
   // Resize handles only make sense for a single selected node.
   // With multi-select (2+ nodes), resize is disabled.
@@ -203,6 +265,7 @@ export function NodeRenderer({
             isDimmed={dimmedNodeIds?.has(node.id) ?? false}
             isHighlighted={highlightedNodeIds?.has(node.id) ?? false}
             isActiveMatch={node.id === activeMatchNodeId}
+            isExiting={exitingNodes.has(node.id)}
           />
         ))}
 
@@ -223,6 +286,7 @@ export function NodeRenderer({
             isDimmed={dimmedNodeIds?.has(node.id) ?? false}
             isHighlighted={highlightedNodeIds?.has(node.id) ?? false}
             isActiveMatch={node.id === activeMatchNodeId}
+            isExiting={exitingNodes.has(node.id)}
           />
         ))}
 
