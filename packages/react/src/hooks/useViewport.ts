@@ -89,32 +89,26 @@ export function useViewport(options: UseViewportOptions): UseViewportResult {
     const group = groupRef.current
     if (!svg || !group) return
 
+    // --- Pan inertia state ---
+    // Buffer recent position samples so velocity survives stale final frames.
+    const samples: { x: number; y: number; t: number }[] = []
+    let isPanGesture = false
+    let inertiaRaf = 0
+
+    const cancelInertia = () => {
+      if (inertiaRaf) { cancelAnimationFrame(inertiaRaf); inertiaRaf = 0 }
+    }
+
     const zoomBehavior = zoom<SVGSVGElement, unknown>()
       .scaleExtent([minZoom, maxZoom])
-      // Don't start pan/zoom when the gesture begins on a node — that's a
-      // node drag. d3-zoom's default filter lets through most events; we
-      // extend it to also reject drag-starting events originating inside
-      // a node. Wheel events are always allowed so scroll-to-zoom works
-      // anywhere over the canvas, even when the cursor is over a node.
       .filter((event) => {
-        // Suppress pan when the user is drawing a marquee (Space held).
-        // Wheel events are still allowed so pinch-zoom works during marquee mode.
         if (marqueeActiveRef?.current && event.type !== 'wheel') return false
-        // Mirror d3-zoom's default rules for the things we still want to
-        // honor (ignore secondary buttons etc.). Note: we intentionally
-        // don't block ctrl+wheel — letting it through matches d3-zoom's
-        // default (native pinch gestures come through as ctrl+wheel).
         if (event.button) return false
 
         if (event.type === 'wheel') {
-          // In trackpad mode, only let Cmd+scroll / Ctrl+scroll (pinch)
-          // through to d3-zoom's zoom handler. Plain scrolls are intercepted
-          // by the custom wheel listener below and turned into pan transforms.
           if (panModeRef.current === 'trackpad') {
             return event.metaKey || event.ctrlKey
           }
-          // In drag mode, wheel events always pass through — zooming works
-          // regardless of what's under the cursor.
           return true
         }
 
@@ -126,11 +120,65 @@ export function useViewport(options: UseViewportOptions): UseViewportResult {
         }
         return true
       })
+      .on('start', (event) => {
+        cancelInertia()
+        const src = event.sourceEvent?.type
+        isPanGesture = src === 'mousedown' || src === 'pointerdown' || src === 'touchstart'
+        samples.length = 0
+      })
       .on('zoom', (event) => {
         const { x, y, k } = event.transform
         group.setAttribute('transform', `translate(${x},${y}) scale(${k})`)
         viewport.current = { x, y, zoom: k }
         onViewportChangeRef.current?.({ x, y, zoom: k })
+
+        if (isPanGesture) {
+          const now = performance.now()
+          samples.push({ x, y, t: now })
+          // Keep only the last ~100ms of samples
+          while (samples.length > 1 && now - samples[0].t > 100) {
+            samples.shift()
+          }
+        }
+      })
+      .on('end', () => {
+        if (!isPanGesture) return
+        isPanGesture = false
+
+        if (samples.length < 2) return
+        const first = samples[0]
+        const last = samples[samples.length - 1]
+        const dt = last.t - first.t
+        if (dt < 8) return
+
+        const vxPerMs = (last.x - first.x) / dt
+        const vyPerMs = (last.y - first.y) / dt
+        const speed = Math.sqrt(vxPerMs * vxPerMs + vyPerMs * vyPerMs)
+        if (speed < 0.08) return
+
+        const friction = 0.94
+        let curVx = vxPerMs * 1000
+        let curVy = vyPerMs * 1000
+
+        const glide = () => {
+          curVx *= friction
+          curVy *= friction
+
+          if (Math.abs(curVx) < 0.3 && Math.abs(curVy) < 0.3) {
+            inertiaRaf = 0
+            return
+          }
+
+          const t = zoomTransform(svg)
+          const dt = 1 / 60
+          const newT = zoomIdentity
+            .translate(t.x + curVx * dt, t.y + curVy * dt)
+            .scale(t.k)
+          selection.call(zoomBehavior.transform, newT)
+
+          inertiaRaf = requestAnimationFrame(glide)
+        }
+        inertiaRaf = requestAnimationFrame(glide)
       })
 
     zoomBehaviorRef.current = zoomBehavior
@@ -170,6 +218,7 @@ export function useViewport(options: UseViewportOptions): UseViewportResult {
     svg.addEventListener('wheel', handleTrackpadWheel, { passive: false })
 
     return () => {
+      cancelInertia()
       svg.removeEventListener('wheel', handleTrackpadWheel)
       selection.on('.zoom', null)
     }

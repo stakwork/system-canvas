@@ -54,6 +54,7 @@ export function ResizeHandles({
   const { x, y, width, height } = node
   const [hoveredCorner, setHoveredCorner] = useState<ResizeCorner | null>(null)
   const [groupHovered, setGroupHovered] = useState(false)
+  const [resizing, setResizing] = useState(false)
 
   const handleColor = node.resolvedStroke ?? theme.node.labelColor
   const i = cornerInset(node.resolvedCornerRadius)
@@ -101,7 +102,7 @@ export function ResizeHandles({
             width={s}
             height={s}
             fill={handleColor}
-            opacity={groupHovered || isHovered ? 1 : 0}
+            opacity={resizing ? 0 : (groupHovered || isHovered ? 1 : 0)}
             style={{
               cursor,
               transition: 'opacity 120ms ease-out',
@@ -110,7 +111,17 @@ export function ResizeHandles({
             onPointerLeave={() =>
               setHoveredCorner((c) => (c === corner ? null : c))
             }
-            onPointerDown={(e) => onHandlePointerDown(node, corner, e)}
+            onPointerDown={(e) => {
+              setResizing(true)
+              const onUp = () => {
+                setResizing(false)
+                window.removeEventListener('pointerup', onUp)
+                window.removeEventListener('pointercancel', onUp)
+              }
+              window.addEventListener('pointerup', onUp)
+              window.addEventListener('pointercancel', onUp)
+              onHandlePointerDown(node, corner, e)
+            }}
             onClick={(e) => e.stopPropagation()}
             onDoubleClick={(e) => e.stopPropagation()}
           />
