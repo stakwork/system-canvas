@@ -392,6 +392,30 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
       return cullNodes(renderNodes, viewportState, w, h)
     }, [renderNodes, viewportState, dragOverrides, resizeOverrides])
 
+    const visibleEdges = useMemo(() => {
+      const hasDrag = dragOverrides && dragOverrides.size > 0
+      const hasResize = resizeOverrides && resizeOverrides.size > 0
+      if (!viewportState || hasDrag || hasResize) return edges
+      const { w, h } = containerSizeRef.current
+      if (w <= 0 || h <= 0) return edges
+      const { x: vx, y: vy, zoom } = viewportState
+      const margin = 200
+      const left = (-vx / zoom) - margin
+      const top = (-vy / zoom) - margin
+      const right = ((w - vx) / zoom) + margin
+      const bottom = ((h - vy) / zoom) + margin
+      return edges.filter((e) => {
+        const from = renderNodeMap.get(e.fromNode)
+        const to = renderNodeMap.get(e.toNode)
+        if (!from || !to) return false
+        const ex = Math.min(from.x, to.x)
+        const ey = Math.min(from.y, to.y)
+        const eRight = Math.max(from.x + from.width, to.x + to.width)
+        const eBottom = Math.max(from.y + from.height, to.y + to.height)
+        return ex < right && eRight > left && ey < bottom && eBottom > top
+      })
+    }, [edges, renderNodeMap, viewportState, dragOverrides, resizeOverrides])
+
     // Keep a ref to the latest nodes so auto-fit effects can read them
     // without taking `nodes` as a dependency (which would re-fit on every edit).
     const latestNodesRef = useRef(nodes)
@@ -682,7 +706,7 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
               over translucent group fills (and are clickable there), while
               still tucking under opaque nodes at their endpoints. */}
           <EdgeRenderer
-            edges={edges}
+            edges={visibleEdges}
             nodeMap={renderNodeMap}
             theme={theme}
             defaultEdgeStyle={edgeStyle}
@@ -734,21 +758,23 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
 
           {/* Target highlight (halo) for the currently-hovered drop target
               during an edge-creation drag. */}
-          {pendingTargetNode && (
-            <rect
-              className="system-canvas-drop-target"
-              x={pendingTargetNode.x - 4}
-              y={pendingTargetNode.y - 4}
-              width={pendingTargetNode.width + 8}
-              height={pendingTargetNode.height + 8}
-              rx={pendingTargetNode.resolvedCornerRadius + 4}
-              fill="none"
-              stroke={theme.node.labelColor}
-              strokeWidth={2}
-              opacity={0.85}
-              pointerEvents="none"
-            />
-          )}
+          {pendingTargetNode && (() => {
+            const accentColor = pendingTargetNode.resolvedStroke ?? theme.node.labelColor
+            return (
+              <rect
+                className="system-canvas-drop-target"
+                x={pendingTargetNode.x - 1}
+                y={pendingTargetNode.y - 1}
+                width={pendingTargetNode.width + 2}
+                height={pendingTargetNode.height + 2}
+                rx={(pendingTargetNode.resolvedCornerRadius ?? 0) + 1}
+                fill={accentColor}
+                filter="url(#system-canvas-selection-glow)"
+                opacity={0.55}
+                pointerEvents="none"
+              />
+            )
+          })()}
 
           {/* Target highlight (halo) for the currently-hovered drop target
               during a node-on-node drop drag. Drawn with a dashed stroke
@@ -756,22 +782,23 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
               the two interactions are visually distinguishable when both
               are wired up — e.g. dragging a feature card while another
               user is mid edge-create on the same node. */}
-          {dropTargetNode && (
-            <rect
-              className="system-canvas-drop-target system-canvas-node-drop-target"
-              x={dropTargetNode.x - 4}
-              y={dropTargetNode.y - 4}
-              width={dropTargetNode.width + 8}
-              height={dropTargetNode.height + 8}
-              rx={dropTargetNode.resolvedCornerRadius + 4}
-              fill="none"
-              stroke={theme.node.labelColor}
-              strokeWidth={2}
-              strokeDasharray="6 4"
-              opacity={0.9}
-              pointerEvents="none"
-            />
-          )}
+          {dropTargetNode && (() => {
+            const accentColor = dropTargetNode.resolvedStroke ?? theme.node.labelColor
+            return (
+              <rect
+                className="system-canvas-drop-target system-canvas-node-drop-target"
+                x={dropTargetNode.x - 1}
+                y={dropTargetNode.y - 1}
+                width={dropTargetNode.width + 2}
+                height={dropTargetNode.height + 2}
+                rx={(dropTargetNode.resolvedCornerRadius ?? 0) + 1}
+                fill={accentColor}
+                filter="url(#system-canvas-selection-glow)"
+                opacity={0.55}
+                pointerEvents="none"
+              />
+            )
+          })()}
 
           {/* Selection indicator — glow for regular nodes, thin outline for groups */}
           {selectedIds && selectedIds.size > 0 &&
