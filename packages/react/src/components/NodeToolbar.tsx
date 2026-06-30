@@ -597,12 +597,15 @@ function SwatchButton({
   theme: CanvasTheme
   onClick: () => void
 }) {
+  const [hovered, setHovered] = React.useState(false)
   const color = action.swatch ?? theme.node.labelColor
   return (
     <button
       type="button"
       title={action.label}
       onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         width: SWATCH_SIZE,
         height: SWATCH_SIZE,
@@ -616,6 +619,7 @@ function SwatchButton({
         outline: 'none',
         boxShadow: active ? `0 0 0 2px ${theme.background}` : 'none',
         transition: 'transform 80ms ease-out',
+        transform: hovered && !active ? 'scale(1.15)' : 'scale(1)',
       }}
       onMouseDown={(e) => e.preventDefault()}
     />
@@ -633,11 +637,14 @@ function IconButton({
   theme: CanvasTheme
   onClick: () => void
 }) {
+  const [hovered, setHovered] = React.useState(false)
   return (
     <button
       type="button"
       title={action.label}
       onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         width: BUTTON_SIZE,
         height: BUTTON_SIZE,
@@ -646,7 +653,9 @@ function IconButton({
         justifyContent: 'center',
         background: active
           ? theme.breadcrumbs.separatorColor
-          : 'transparent',
+          : hovered
+            ? `${theme.breadcrumbs.separatorColor}88`
+            : 'transparent',
         border: `1px solid ${
           active ? theme.breadcrumbs.activeColor : theme.breadcrumbs.separatorColor
         }`,
@@ -657,6 +666,7 @@ function IconButton({
         cursor: 'pointer',
         padding: 0,
         outline: 'none',
+        transition: 'background 120ms ease-out',
       }}
       onMouseDown={(e) => e.preventDefault()}
     >

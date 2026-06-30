@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import type { CanvasTheme } from 'system-canvas'
 
 interface SearchOverlayProps {
@@ -77,8 +77,15 @@ export function SearchOverlay({
         alignItems: 'center',
         gap: 6,
         pointerEvents: 'none',
+        animation: 'system-canvas-search-in 200ms cubic-bezier(0.22, 1, 0.36, 1)',
       }}
     >
+      <style>{`
+        @keyframes system-canvas-search-in {
+          from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+          to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+      `}</style>
       {/* Search input row */}
       <div
         style={{
@@ -128,25 +135,11 @@ export function SearchOverlay({
         {/* Match navigation */}
         {query.length > 0 && matchCount > 0 && (
           <>
-            <button
-              onClick={onPrev}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '2px 3px',
-                display: 'flex',
-                alignItems: 'center',
-                color: textColor,
-                opacity: 0.7,
-                flexShrink: 0,
-              }}
-              title="Previous match (↑)"
-            >
+            <SearchNavButton onClick={onPrev} title="Previous match (↑)" textColor={textColor}>
               <svg width={10} height={10} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={1.5}>
                 <polyline points="2,7 5,3 8,7" />
               </svg>
-            </button>
+            </SearchNavButton>
             <span
               style={{
                 fontSize: 11,
@@ -159,25 +152,11 @@ export function SearchOverlay({
             >
               {matchIndex + 1}/{matchCount}
             </span>
-            <button
-              onClick={onNext}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '2px 3px',
-                display: 'flex',
-                alignItems: 'center',
-                color: textColor,
-                opacity: 0.7,
-                flexShrink: 0,
-              }}
-              title="Next match (↓)"
-            >
+            <SearchNavButton onClick={onNext} title="Next match (↓)" textColor={textColor}>
               <svg width={10} height={10} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={1.5}>
                 <polyline points="2,3 5,7 8,3" />
               </svg>
-            </button>
+            </SearchNavButton>
           </>
         )}
         {query.length > 0 && matchCount === 0 && (
@@ -196,26 +175,12 @@ export function SearchOverlay({
         )}
 
         {/* Close button */}
-        <button
-          onClick={onClose}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            cursor: 'pointer',
-            padding: 2,
-            display: 'flex',
-            alignItems: 'center',
-            color: textColor,
-            opacity: 0.6,
-            flexShrink: 0,
-          }}
-          title="Close search (Esc)"
-        >
+        <SearchNavButton onClick={onClose} title="Close search (Esc)" textColor={textColor}>
           <svg width={12} height={12} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={1.5}>
             <line x1={1} y1={1} x2={11} y2={11} />
             <line x1={11} y1={1} x2={1} y2={11} />
           </svg>
-        </button>
+        </SearchNavButton>
       </div>
 
       {/* Category toggle pills */}
@@ -259,5 +224,42 @@ export function SearchOverlay({
         </div>
       )}
     </div>
+  )
+}
+
+function SearchNavButton({
+  onClick,
+  title,
+  textColor,
+  children,
+}: {
+  onClick: () => void
+  title: string
+  textColor: string
+  children: React.ReactNode
+}) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: hovered ? `${textColor}15` : 'transparent',
+        border: 'none',
+        cursor: 'pointer',
+        padding: '2px 3px',
+        borderRadius: 4,
+        display: 'flex',
+        alignItems: 'center',
+        color: textColor,
+        opacity: hovered ? 1 : 0.7,
+        flexShrink: 0,
+        transition: 'opacity 100ms ease, background 100ms ease',
+      }}
+      title={title}
+    >
+      {children}
+    </button>
   )
 }
