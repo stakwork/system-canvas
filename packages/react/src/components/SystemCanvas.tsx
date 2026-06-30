@@ -819,6 +819,10 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
   const [searchIndex, setSearchIndex] = useState(0)
   const [importError, setImportError] = useState<string | null>(null)
 
+  // Undo/redo toast
+  const [undoToast, setUndoToast] = useState<string | null>(null)
+  const undoToastTimerRef = useRef<number | null>(null)
+
   // Proxy ref for the SVG element — declared early so both useMultiSelect,
   // useNodeDrag, and useEdgeCreate can all share it. The `.current` assignment
   // runs every render further below; hooks read it lazily at gesture time.
@@ -935,7 +939,10 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
         e.preventDefault()
-        setSearchOpen((prev) => !prev)
+        setSearchOpen((prev) => {
+          if (!prev) clearSelection()
+          return !prev
+        })
       }
     }
     window.addEventListener('keydown', onKey)
@@ -1085,10 +1092,28 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
   const matchingIdsArray = useMemo(() => Array.from(matchingIds), [matchingIds])
   const activeMatchId = matchingIdsArray[searchIndex] as string | undefined
 
-  // Reset index whenever the match set changes (query or filter changed)
+  // Reset index whenever the match set changes (query or filter changed).
+  // Auto-pan to the match when there's exactly one result, debounced so
+  // it doesn't fire on every keystroke.
+  const searchPanTimerRef = useRef<number | null>(null)
   useEffect(() => {
     setSearchIndex(0)
-  }, [matchingIds])
+    if (searchPanTimerRef.current !== null) clearTimeout(searchPanTimerRef.current)
+    if (matchingIdsArray.length === 1) {
+      searchPanTimerRef.current = window.setTimeout(() => {
+        const node = nodesRef.current.find((n) => n.id === matchingIdsArray[0])
+        const handle = viewportHandleRef.current
+        if (node && handle) {
+          const currentZoom = viewportStateRef.current.zoom
+          handle.zoomToNode(node, undefined, {
+            targetZoom: Math.max(currentZoom, 1.5),
+            durationMs: 700,
+          })
+        }
+        searchPanTimerRef.current = null
+      }, 300)
+    }
+  }, [matchingIds]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pan camera to a specific match by index
   const panToMatch = useCallback((index: number) => {
@@ -1100,7 +1125,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
     const currentZoom = viewportStateRef.current.zoom
     handle.zoomToNode(node, undefined, {
       targetZoom: Math.max(currentZoom, 1.5),
-      durationMs: 400,
+      durationMs: 600,
     })
   }, [matchingIdsArray])
 
@@ -1735,8 +1760,18 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
     onNodeUpdate,
     beginBatch,
     endBatch,
-    undo,
-    redo,
+    undo: () => {
+      undo()
+      if (undoToastTimerRef.current !== null) clearTimeout(undoToastTimerRef.current)
+      setUndoToast('Undone')
+      undoToastTimerRef.current = window.setTimeout(() => setUndoToast(null), 1200)
+    },
+    redo: () => {
+      redo()
+      if (undoToastTimerRef.current !== null) clearTimeout(undoToastTimerRef.current)
+      setUndoToast('Redone')
+      undoToastTimerRef.current = window.setTimeout(() => setUndoToast(null), 1200)
+    },
     selectNode,
     selectMultiple,
     selectAll,
@@ -1894,6 +1929,32 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
           >
             ×
           </button>
+        </div>
+      )}
+
+      {/* Undo/redo toast */}
+      {undoToast && (
+        <div
+          className="system-canvas-undo-toast"
+          style={{
+            position: "absolute",
+            bottom: 16,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 10,
+            padding: "5px 14px",
+            background: theme.breadcrumbs.background,
+            borderRadius: 6,
+            color: theme.breadcrumbs.textColor,
+            fontFamily: theme.node.fontFamily,
+            fontSize: 12,
+            backdropFilter: "blur(8px)",
+            animation: "system-canvas-toast-in 150ms cubic-bezier(0.22, 1, 0.36, 1)",
+            pointerEvents: "none",
+          }}
+        >
+          {undoToast}
+          <style>{`@keyframes system-canvas-toast-in { from { opacity: 0; transform: translateX(-50%) translateY(6px) } to { opacity: 1; transform: translateX(-50%) translateY(0) } }`}</style>
         </div>
       )}
 
