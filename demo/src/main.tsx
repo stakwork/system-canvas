@@ -680,6 +680,7 @@ function App() {
         onNavigate={(ref: string) => {
           console.log('Navigating to:', ref)
         }}
+        showMinimap
       />
     </div>
   )

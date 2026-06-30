@@ -64,6 +64,7 @@ import { Viewport, type ViewportHandle } from './Viewport.js'
 import { Breadcrumbs } from './Breadcrumbs.js'
 import { AddNodeButton, type AddNodeButtonRenderProps } from './AddNodeButton.js'
 import { LaneHeaders } from './LaneHeaders.js'
+import { Minimap } from './Minimap.js'
 import { NodeToolbar, type NodeToolbarRenderProps, type AlignDirection } from './NodeToolbar.js'
 import { useAlignmentGuides } from '../hooks/useAlignmentGuides.js'
 import {
@@ -452,6 +453,10 @@ export interface SystemCanvasProps {
    */
   collaborators?: CollaboratorInfo[]
 
+  // --- Minimap ---
+  /** Show a bird's-eye minimap in the bottom-left corner. Default false. */
+  showMinimap?: boolean
+
   // --- Styling ---
   className?: string
   style?: React.CSSProperties
@@ -566,6 +571,7 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
       onUndo,
       onRedo,
       collaborators = [],
+      showMinimap = false,
       className,
       style,
     },
@@ -2069,6 +2075,21 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
           width={containerSize.width}
           height={containerSize.height}
           pinned={laneHeaders === "pinned"}
+        />
+      )}
+
+      {/* Minimap — bird's-eye overview in bottom-left corner */}
+      {showMinimap && nodes.length > 0 && (
+        <Minimap
+          nodes={nodes}
+          theme={theme}
+          getViewport={getViewportState}
+          setTransform={(transform, options) => {
+            viewportHandleRef.current?.setTransform(transform, options)
+          }}
+          getSvgElement={() =>
+            viewportHandleRef.current?.getSvgElement() ?? null
+          }
         />
       )}
 
