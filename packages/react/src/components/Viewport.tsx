@@ -623,7 +623,27 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
               strokeWidth={theme.grid.strokeWidth}
             />
           </pattern>
+          <filter id="system-canvas-selection-glow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" />
+          </filter>
         </defs>
+        <style>{`
+          .system-canvas-selection-halo {
+            opacity: 0.5;
+            animation: system-canvas-halo-breathe 2.5s ease-in-out infinite;
+          }
+          @keyframes system-canvas-halo-breathe {
+            0%, 100% { opacity: 0.35; }
+            50% { opacity: 0.55; }
+          }
+          .system-canvas-search-pulse {
+            animation: system-canvas-search-ring 600ms cubic-bezier(0.22, 1, 0.36, 1);
+          }
+          @keyframes system-canvas-search-ring {
+            0% { stroke-width: 5; opacity: 0.4; }
+            100% { stroke-width: 3.5; opacity: 1; }
+          }
+        `}</style>
 
         {/* Grid background */}
         <rect
@@ -753,27 +773,42 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(
             />
           )}
 
-          {/* Selection halos for multi-select (and single-select).
-              One halo rect per selected node id, rendered above all other
-              node/edge content so the ring is always visible. Mirrors the
-              dropTargetNode halo pattern. */}
+          {/* Selection indicator — glow for regular nodes, thin outline for groups */}
           {selectedIds && selectedIds.size > 0 &&
             Array.from(selectedIds).map((id) => {
               const node = renderNodeMap.get(id)
               if (!node) return null
+              const accentColor = node.resolvedStroke ?? theme.node.labelColor
+              if (node.type === 'group') {
+                return (
+                  <rect
+                    key={`halo-${id}`}
+                    className="system-canvas-selection-halo"
+                    data-no-export="true"
+                    x={node.x - 2}
+                    y={node.y - 2}
+                    width={node.width + 4}
+                    height={node.height + 4}
+                    rx={(node.resolvedCornerRadius ?? 0) + 2}
+                    fill="none"
+                    stroke={accentColor}
+                    strokeWidth={1.5}
+                    pointerEvents="none"
+                  />
+                )
+              }
               return (
                 <rect
                   key={`halo-${id}`}
+                  className="system-canvas-selection-halo"
                   data-no-export="true"
-                  x={node.x - 3}
-                  y={node.y - 3}
-                  width={node.width + 6}
-                  height={node.height + 6}
-                  rx={(node.resolvedCornerRadius ?? 0) + 3}
-                  fill="none"
-                  stroke={theme.node.labelColor}
-                  strokeWidth={1.5}
-                  opacity={0.7}
+                  x={node.x - 1}
+                  y={node.y - 1}
+                  width={node.width + 2}
+                  height={node.height + 2}
+                  rx={(node.resolvedCornerRadius ?? 0) + 1}
+                  fill={accentColor}
+                  filter="url(#system-canvas-selection-glow)"
                   pointerEvents="none"
                 />
               )

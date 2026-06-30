@@ -141,17 +141,10 @@ const MemoizedNode = React.memo(function MemoizedNode({
   return (
     <g ref={gRef} opacity={isDimmed ? 0.15 : 1} style={isExiting ? { pointerEvents: 'none' } : undefined}>
       {isHighlighted && (
-        <rect
-          x={node.x - 4}
-          y={node.y - 4}
-          width={node.width + 8}
-          height={node.height + 8}
-          rx={6}
-          fill="none"
-          stroke={theme.node.labelColor}
-          strokeWidth={isActiveMatch ? 3.5 : 2}
-          opacity={isActiveMatch ? 1 : 0.6}
-          pointerEvents="none"
+        <SearchHighlightRect
+          node={node}
+          theme={theme}
+          isActiveMatch={isActiveMatch}
         />
       )}
       <Component
@@ -316,6 +309,49 @@ export function NodeRenderer({
           )
         })()}
     </>
+  )
+}
+
+function SearchHighlightRect({
+  node,
+  theme,
+  isActiveMatch,
+}: {
+  node: ResolvedNode
+  theme: CanvasTheme
+  isActiveMatch: boolean
+}) {
+  const rectRef = useRef<SVGRectElement>(null)
+  const wasActiveRef = useRef(false)
+
+  useEffect(() => {
+    if (isActiveMatch && !wasActiveRef.current) {
+      const el = rectRef.current
+      if (el) {
+        el.classList.remove('system-canvas-search-pulse')
+        // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+        el.getBoundingClientRect()
+        el.classList.add('system-canvas-search-pulse')
+      }
+    }
+    wasActiveRef.current = isActiveMatch
+  }, [isActiveMatch])
+
+  const accentColor = node.resolvedStroke ?? theme.node.labelColor
+  return (
+    <rect
+      ref={rectRef}
+      className={isActiveMatch ? 'system-canvas-selection-halo' : undefined}
+      x={node.x - 1}
+      y={node.y - 1}
+      width={node.width + 2}
+      height={node.height + 2}
+      rx={(node.resolvedCornerRadius ?? 0) + 1}
+      fill={accentColor}
+      filter="url(#system-canvas-selection-glow)"
+      opacity={isActiveMatch ? 0.7 : 0.35}
+      pointerEvents="none"
+    />
   )
 }
 

@@ -53,6 +53,7 @@ export function ResizeHandles({
 }: ResizeHandlesProps) {
   const { x, y, width, height } = node
   const [hoveredCorner, setHoveredCorner] = useState<ResizeCorner | null>(null)
+  const [groupHovered, setGroupHovered] = useState(false)
 
   const handleColor = node.resolvedStroke ?? theme.node.labelColor
   const i = cornerInset(node.resolvedCornerRadius)
@@ -70,7 +71,23 @@ export function ResizeHandles({
   }
 
   return (
-    <g className="system-canvas-resize-handles" pointerEvents="all">
+    <g
+      className="system-canvas-resize-handles"
+      pointerEvents="all"
+      onPointerEnter={() => setGroupHovered(true)}
+      onPointerLeave={() => setGroupHovered(false)}
+    >
+      {/* Invisible hit area covering the node edges so handles appear on hover */}
+      <rect
+        x={x - HANDLE_SIZE}
+        y={y - HANDLE_SIZE}
+        width={width + HANDLE_SIZE * 2}
+        height={height + HANDLE_SIZE * 2}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={HANDLE_SIZE * 2}
+        pointerEvents="stroke"
+      />
       {CORNERS.map(({ corner, cursor, anchor }) => {
         const { cx, cy } = anchorPos(anchor)
         const isHovered = hoveredCorner === corner
@@ -84,7 +101,11 @@ export function ResizeHandles({
             width={s}
             height={s}
             fill={handleColor}
-            style={{ cursor }}
+            opacity={groupHovered || isHovered ? 1 : 0}
+            style={{
+              cursor,
+              transition: 'opacity 120ms ease-out',
+            }}
             onPointerEnter={() => setHoveredCorner(corner)}
             onPointerLeave={() =>
               setHoveredCorner((c) => (c === corner ? null : c))
