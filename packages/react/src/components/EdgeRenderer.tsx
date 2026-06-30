@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import type {
   CanvasEdge,
   ResolvedNode,
@@ -67,18 +67,30 @@ export function EdgeRenderer({
       viewport: effectiveViewportRef,
       onCommit: onWaypointCommit ?? (() => {}),
     })
+
+  const knownEdgeIdsRef = useRef<Set<string>>(new Set())
+  const newEdgeIdsRef = useRef<Set<string>>(new Set())
+
+  useEffect(() => {
+    const currentIds = new Set(edges.map((e) => e.id))
+    const fresh = new Set<string>()
+    for (const id of currentIds) {
+      if (!knownEdgeIdsRef.current.has(id)) fresh.add(id)
+    }
+    knownEdgeIdsRef.current = currentIds
+    newEdgeIdsRef.current = fresh
+  }, [edges])
+
   return (
     <>
-      {/* Arrowhead marker definition. Uses `context-stroke` so the polygon
-          inherits the stroke color of whichever path references it — that
-          way one marker serves edges of any color (theme default, preset
-          color, or selected highlight) without us needing a marker per
-          color. Selected edges already set their path stroke to the
-          high-contrast label color, so the arrow follows along. */}
       <defs>
         <style>{`
           @keyframes system-canvas-march {
             to { stroke-dashoffset: -20; }
+          }
+          @keyframes system-canvas-edge-draw {
+            from { stroke-dashoffset: var(--edge-length); opacity: 0.4; }
+            to { stroke-dashoffset: 0; opacity: 1; }
           }
         `}</style>
         <marker
@@ -145,6 +157,8 @@ export function EdgeRenderer({
         const isEdgeDimmed =
           (dimmedNodeIds?.has(edge.fromNode) || dimmedNodeIds?.has(edge.toNode)) ?? false
 
+        const isNewEdge = newEdgeIdsRef.current.has(edge.id)
+
         return (
           <g
             key={edge.id}
@@ -163,17 +177,29 @@ export function EdgeRenderer({
             />
 
             {/* Visible path */}
-            <path
-              d={pathD}
-              fill="none"
-              stroke={edgeColor}
-              strokeWidth={strokeWidth}
-              strokeDasharray={edge.animated ? '6 4' : (isEdgeDimmed ? '4 4' : undefined)}
-              style={edge.animated ? { animation: 'system-canvas-march 0.6s linear infinite' } : undefined}
-              strokeOpacity={isEdgeDimmed ? 0.3 : 1}
-              markerEnd={toEnd === 'arrow' ? `url(#${arrowId})` : undefined}
-              markerStart={fromEnd === 'arrow' ? `url(#${arrowId})` : undefined}
-            />
+            {isNewEdge && !edge.animated ? (
+              <AnimatedEdgePath
+                d={pathD}
+                stroke={edgeColor}
+                strokeWidth={strokeWidth}
+                strokeDasharray={isEdgeDimmed ? '4 4' : undefined}
+                strokeOpacity={isEdgeDimmed ? 0.3 : 1}
+                markerEnd={toEnd === 'arrow' ? `url(#${arrowId})` : undefined}
+                markerStart={fromEnd === 'arrow' ? `url(#${arrowId})` : undefined}
+              />
+            ) : (
+              <path
+                d={pathD}
+                fill="none"
+                stroke={edgeColor}
+                strokeWidth={strokeWidth}
+                strokeDasharray={edge.animated ? '6 4' : (isEdgeDimmed ? '4 4' : undefined)}
+                style={edge.animated ? { animation: 'system-canvas-march 0.6s linear infinite' } : undefined}
+                strokeOpacity={isEdgeDimmed ? 0.3 : 1}
+                markerEnd={toEnd === 'arrow' ? `url(#${arrowId})` : undefined}
+                markerStart={fromEnd === 'arrow' ? `url(#${arrowId})` : undefined}
+              />
+            )}
 
             {/* Edge label (hidden while editing) */}
             {edge.label && !isEditing && (
@@ -301,5 +327,60 @@ export function EdgeRenderer({
         )
       })}
     </>
+  )
+}
+
+function AnimatedEdgePath({
+  d,
+  stroke,
+  strokeWidth,
+  strokeDasharray,
+  strokeOpacity,
+  markerEnd,
+  markerStart,
+}: {
+  d: string
+  stroke: string
+  strokeWidth: number
+  strokeDasharray?: string
+  strokeOpacity: number
+  markerEnd?: string
+  markerStart?: string
+}) {
+  const pathRef = useRef<SVGPathElement>(null)
+
+  useEffect(() => {
+    const el = pathRef.current
+    if (!el) return
+    const len = el.getTotalLength()
+    el.style.strokeDasharray = `${len}`
+    el.style.strokeDashoffset = `${len}`
+    el.style.opacity = '0.4'
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    el.getBoundingClientRect()
+    el.style.transition = 'stroke-dashoffset 350ms cubic-bezier(0.22, 1, 0.36, 1), opacity 350ms ease-out'
+    el.style.strokeDashoffset = '0'
+    el.style.opacity = '1'
+
+    const timer = window.setTimeout(() => {
+      el.style.transition = ''
+      el.style.strokeDasharray = strokeDasharray ?? ''
+      el.style.strokeDashoffset = ''
+      el.style.opacity = ''
+    }, 380)
+    return () => clearTimeout(timer)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <path
+      ref={pathRef}
+      d={d}
+      fill="none"
+      stroke={stroke}
+      strokeWidth={strokeWidth}
+      strokeOpacity={strokeOpacity}
+      markerEnd={markerEnd}
+      markerStart={markerStart}
+    />
   )
 }
