@@ -1,6 +1,6 @@
 {
   "name": "system-canvas-standalone",
-  "version": "0.2.49",
+  "version": "0.2.50",
   "description": "Self-contained browser bundle for system-canvas. Drop-in <script> tag with React inlined; renders a fully interactive canvas into any DOM element.",
   "license": "MIT",
   "repository": {
@@ -29,8 +29,8 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "system-canvas": "^0.2.49",
-    "system-canvas-react": "^0.2.49",
+    "system-canvas": "^0.2.50",
+    "system-canvas-react": "^0.2.50",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
