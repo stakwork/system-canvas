@@ -38,7 +38,11 @@ function makeTheme(): CanvasTheme {
   } as unknown as CanvasTheme
 }
 
-function makeKeyEvent(key: string, opts: Partial<KeyboardEvent> = {}): React.KeyboardEvent<HTMLDivElement> {
+function makeKeyEvent(
+  key: string,
+  opts: Partial<KeyboardEvent> & { target?: Partial<HTMLElement> } = {}
+): React.KeyboardEvent<HTMLDivElement> {
+  const { target, ...rest } = opts
   return {
     key,
     metaKey: false,
@@ -46,7 +50,8 @@ function makeKeyEvent(key: string, opts: Partial<KeyboardEvent> = {}): React.Key
     shiftKey: false,
     preventDefault: vi.fn(),
     stopPropagation: vi.fn(),
-    ...opts,
+    target: target ?? undefined,
+    ...rest,
   } as unknown as React.KeyboardEvent<HTMLDivElement>
 }
 
@@ -607,6 +612,46 @@ describe('useKeyboardShortcuts', () => {
       const e = makeKeyEvent('f')
       act(() => result.current(e))
       expect(fitSelection).not.toHaveBeenCalled()
+    })
+
+    it('F with INPUT target does not call fitSelection and does not preventDefault', () => {
+      const fitSelection = vi.fn()
+      const opts = makeOptions({ fitSelection })
+      const { result } = renderHook(() => useKeyboardShortcuts(opts))
+      const e = makeKeyEvent('f', { target: { tagName: 'INPUT' } as HTMLElement })
+      act(() => result.current(e))
+      expect(fitSelection).not.toHaveBeenCalled()
+      expect(e.preventDefault).not.toHaveBeenCalled()
+    })
+
+    it('F with TEXTAREA target does not call fitSelection and does not preventDefault', () => {
+      const fitSelection = vi.fn()
+      const opts = makeOptions({ fitSelection })
+      const { result } = renderHook(() => useKeyboardShortcuts(opts))
+      const e = makeKeyEvent('f', { target: { tagName: 'TEXTAREA' } as HTMLElement })
+      act(() => result.current(e))
+      expect(fitSelection).not.toHaveBeenCalled()
+      expect(e.preventDefault).not.toHaveBeenCalled()
+    })
+
+    it('F with contentEditable target does not call fitSelection and does not preventDefault', () => {
+      const fitSelection = vi.fn()
+      const opts = makeOptions({ fitSelection })
+      const { result } = renderHook(() => useKeyboardShortcuts(opts))
+      const e = makeKeyEvent('f', { target: { isContentEditable: true } as HTMLElement })
+      act(() => result.current(e))
+      expect(fitSelection).not.toHaveBeenCalled()
+      expect(e.preventDefault).not.toHaveBeenCalled()
+    })
+
+    it('Cmd+Shift+F with INPUT target still calls fitSelection (global shortcut)', () => {
+      const fitSelection = vi.fn()
+      const opts = makeOptions({ fitSelection })
+      const { result } = renderHook(() => useKeyboardShortcuts(opts))
+      const e = makeKeyEvent('F', { metaKey: true, shiftKey: true, target: { tagName: 'INPUT' } as HTMLElement })
+      act(() => result.current(e))
+      expect(fitSelection).toHaveBeenCalled()
+      expect(e.preventDefault).toHaveBeenCalled()
     })
   })
 })
