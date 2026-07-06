@@ -114,6 +114,13 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions) {
         ((meta || ctrl) && shift && key === 'F')
       ) {
         if (editingId || editingEdgeId) return
+        // bare 'f' must not swallow keystrokes when a text-entry element has focus
+        if (key === 'f' && !meta && !ctrl && !shift) {
+          const el = e.target as HTMLElement | null
+          if (el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA' || el?.isContentEditable) {
+            return
+          }
+        }
         e.preventDefault()
         fitSelection?.()
         return
