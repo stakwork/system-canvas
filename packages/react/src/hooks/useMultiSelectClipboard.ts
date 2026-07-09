@@ -74,6 +74,17 @@ export function useMultiSelectClipboard(options: UseMultiSelectClipboardOptions)
       // Cmd+C — copy
       // -----------------------------------------------------------------------
       if (isMod && e.key === 'c') {
+        // Never clobber a real text selection. The canvas's own SVG text is
+        // `user-select: none`, so any non-collapsed selection lives in
+        // consuming DOM (e.g. a chat sidebar overlaid on the canvas). Bail so
+        // the browser's native copy wins — otherwise `preventDefault()` below
+        // would swallow the copy and the user's selected text never reaches
+        // the clipboard whenever canvas nodes happen to be selected.
+        const textSelection = window.getSelection()
+        if (textSelection && !textSelection.isCollapsed && textSelection.toString().length > 0) {
+          return
+        }
+
         const selectedIds = selectedIdsRef.current
         if (!selectedIds || selectedIds.size === 0) return
 
