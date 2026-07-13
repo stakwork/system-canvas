@@ -14,6 +14,7 @@ const workspaces = [
   'packages/core',
   'packages/react',
   'packages/standalone',
+  'packages/collab',
 ];
 
 // Names of packages in this monorepo whose cross-dependency ranges should
@@ -22,6 +23,7 @@ const internalNames = new Set([
   'system-canvas',
   'system-canvas-react',
   'system-canvas-standalone',
+  'system-canvas-collab',
 ]);
 
 const depFields = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'];

@@ -3,6 +3,11 @@
   "version": "0.2.57",
   "description": "Yjs-backed multi-user collaboration for system-canvas. Binds a Y.Doc to the renderer's controlled props so any consumer gets conflict-free multiplayer by supplying only a transport.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stakwork/system-canvas.git",
+    "directory": "packages/collab"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

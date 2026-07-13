@@ -11,6 +11,7 @@ Interactive, infinitely zoomable, editable SVG diagrams from JSON Canvas documen
 | `system-canvas`            | Pure TypeScript core. Types, themes, edge routing, viewport math. Zero dependencies. |
 | `system-canvas-react`      | React components. Pan/zoom viewport, node renderers, breadcrumb navigation.          |
 | `system-canvas-standalone` | Self-contained IIFE bundle for `<script>` tag / CDN use. No build step required.     |
+| `system-canvas-collab`     | Yjs-backed multi-user collaboration. Binds a Y.Doc to the renderer's props + awareness → conflict-free multiplayer; you supply the transport. |
 
 ## Install
 
@@ -171,6 +172,40 @@ Interactions in editable mode:
 - **Double-click** a node to inline-edit its text/file/link/label; **double-click** an edge to inline-edit its label.
 - **Hover** a node to reveal four connection handles (one per side); **drag** from a handle to another node to create an edge. Groups don't participate in edge creation.
 - **Click** to select, **Delete** or **Backspace** to remove the selected node or edge. **Escape** clears selection.
+
+## Multiplayer (`system-canvas-collab`)
+
+Conflict-free multi-user editing, backed by [Yjs](https://yjs.dev). The
+library owns the merge; you supply a transport (y-websocket, a hosted
+provider, or your own HTTP+pub/sub bridge).
+
+```bash
+npm install system-canvas-collab yjs
+```
+
+```tsx
+import * as Y from "yjs";
+import { WebsocketProvider } from "y-websocket";
+import { SystemCanvas } from "system-canvas-react";
+import { useYjsCanvas, useCollaborators } from "system-canvas-collab";
+
+const doc = new Y.Doc();
+const provider = new WebsocketProvider("wss://…", "room-id", doc);
+
+function Board() {
+  const { canvas, ...handlers } = useYjsCanvas(doc); // Y.Doc ⇄ CanvasData
+  const { collaborators, setLocalCursor } = useCollaborators(provider.awareness);
+  return (
+    <SystemCanvas canvas={canvas} editable collaborators={collaborators} {...handlers} />
+  );
+}
+```
+
+`useYjsCanvas` returns the controlled `canvas` plus every edit callback
+`<SystemCanvas>` needs, routing edits into the Y.Doc (field-level merge;
+per-user undo via `Y.UndoManager`). `useCollaborators` maps a Yjs
+`Awareness` to the `collaborators` prop for live cursors/selection. The
+renderer core is unchanged — collaboration is entirely opt-in.
 
 ## Props
 

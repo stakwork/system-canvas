@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as Y from "yjs";
+import { WebsocketProvider } from "y-websocket";
+import type { Awareness } from "y-protocols/awareness";
 import { SystemCanvas } from "system-canvas-react";
-import { darkTheme } from "system-canvas";
-import type { CanvasData, CanvasSelection } from "system-canvas";
+import { darkTheme, screenToCanvas } from "system-canvas";
+import type { CanvasData, CanvasSelection, ViewportState } from "system-canvas";
 import {
   seedYDoc,
   useCollaborators,
@@ -11,6 +13,20 @@ import {
 import { BroadcastChannelProvider } from "./broadcastProvider";
 
 const ROOM = "system-canvas-collab-demo";
+
+// Transport is chosen by URL:
+//   ?mode=collab          → BroadcastChannel (same-browser tabs, zero setup)
+//   ?mode=collab&ws=1     → y-websocket (ANY browser/window/machine; needs the
+//                            local relay: `npx y-websocket` on port 1234)
+const USE_WS =
+  new URLSearchParams(window.location.search).get("ws") === "1";
+const WS_URL = "ws://localhost:1234";
+
+/** The subset both providers expose that this demo needs. */
+interface Transport {
+  awareness: Awareness;
+  destroy(): void;
+}
 
 const SEED: CanvasData = {
   theme: { base: "dark" },
@@ -57,13 +73,37 @@ export function CollabDemo() {
   // component's lifetime (useMemo is not a stability guarantee and can
   // orphan side-effectful instances on a re-render).
   const [doc] = useState(() => new Y.Doc());
-  const [provider] = useState(() => new BroadcastChannelProvider(ROOM, doc));
+  const [provider] = useState<Transport>(() =>
+    USE_WS
+      ? new WebsocketProvider(WS_URL, ROOM, doc)
+      : new BroadcastChannelProvider(ROOM, doc),
+  );
   useEffect(() => () => provider.destroy(), [provider]);
 
   const { canvas, ...handlers } = useYjsCanvas(doc);
-  const { collaborators, setLocalUser, setLocalSelection } = useCollaborators(
-    provider.awareness,
-  );
+  const { collaborators, setLocalUser, setLocalSelection, setLocalCursor } =
+    useCollaborators(provider.awareness);
+
+  // Live cursor sharing, computed demo-side (the library has no local-
+  // cursor-out prop yet — that's the clean follow-up). We track the
+  // viewport via onViewportChange and convert screen→canvas coords.
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const viewportRef = useRef<ViewportState>({ x: 0, y: 0, zoom: 1 });
+  const lastCursorSentRef = useRef(0);
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    const now = e.timeStamp;
+    if (now - lastCursorSentRef.current < 40) return; // ~25/s throttle
+    lastCursorSentRef.current = now;
+    const rect = wrapperRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const pos = screenToCanvas(
+      e.clientX - rect.left,
+      e.clientY - rect.top,
+      viewportRef.current,
+    );
+    setLocalCursor({ x: pos.x, y: pos.y });
+  };
 
   const user = useMemo(makeUser, []);
   useEffect(() => {
@@ -81,7 +121,12 @@ export function CollabDemo() {
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#0b0e14" }}>
+    <div
+      ref={wrapperRef}
+      onPointerMove={handlePointerMove}
+      onPointerLeave={() => setLocalCursor(null)}
+      style={{ position: "fixed", inset: 0, background: "#0b0e14" }}
+    >
       <div
         style={{
           position: "absolute",
@@ -97,7 +142,10 @@ export function CollabDemo() {
         }}
       >
         You are <b>{user.name}</b> · {collaborators.length} other
-        {collaborators.length === 1 ? "" : "s"} here · open this URL in a 2nd tab
+        {collaborators.length === 1 ? "" : "s"} here ·{" "}
+        {USE_WS
+          ? "WebSocket — open in ANY browser/window"
+          : "BroadcastChannel — open a 2nd tab in THIS browser"}
       </div>
       <SystemCanvas
         canvas={canvas}
@@ -105,6 +153,9 @@ export function CollabDemo() {
         editable
         zoomNavigation
         collaborators={collaborators}
+        onViewportChange={(vp) => {
+          viewportRef.current = vp;
+        }}
         onSelectionChange={onSelectionChange}
         onNodeAdd={handlers.onNodeAdd}
         onNodeUpdate={handlers.onNodeUpdate}
