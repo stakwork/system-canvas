@@ -6,7 +6,8 @@
     "baseUrl": ".",
     "paths": {
       "system-canvas": ["../packages/core/src/index.ts"],
-      "system-canvas-react": ["../packages/react/src/index.ts"]
+      "system-canvas-react": ["../packages/react/src/index.ts"],
+      "system-canvas-collab": ["../packages/collab/src/index.ts"]
     }
   },
   "include": ["src"]

@@ -7,13 +7,14 @@
     "demo"
   ],
   "scripts": {
-    "build": "npm run build:core && npm run build:react && npm run build:standalone",
+    "build": "npm run build:core && npm run build:react && npm run build:standalone && npm run build:collab",
     "build:core": "npm run build -w system-canvas",
     "build:react": "npm run build -w system-canvas-react",
     "build:standalone": "npm run build -w system-canvas-standalone",
+    "build:collab": "npm run build -w system-canvas-collab",
     "dev": "npm run dev -w system-canvas-demo",
-    "test": "npm run test -w system-canvas-react",
-    "typecheck": "npm run typecheck -w system-canvas && npm run typecheck -w system-canvas-react && npm run typecheck -w system-canvas-standalone && npm run typecheck -w system-canvas-demo",
+    "test": "npm run test -w system-canvas-react && npm run test -w system-canvas-collab",
+    "typecheck": "npm run typecheck -w system-canvas && npm run typecheck -w system-canvas-react && npm run typecheck -w system-canvas-standalone && npm run typecheck -w system-canvas-collab && npm run typecheck -w system-canvas-demo",
     "sync-versions": "node scripts/sync-versions.mjs",
     "release:minor": "npm version minor --no-git-tag-version && npm run sync-versions && git add -A && git commit -m \"release: v$(node -p \\\"require('./package.json').version\\\")\" && git push",
     "release:major": "npm version major --no-git-tag-version && npm run sync-versions && git add -A && git commit -m \"release: v$(node -p \\\"require('./package.json').version\\\")\" && git push"
