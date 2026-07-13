@@ -8,6 +8,9 @@ export default defineConfig({
     alias: {
       'system-canvas': path.resolve(__dirname, '../packages/core/src'),
       'system-canvas-react': path.resolve(__dirname, '../packages/react/src'),
+      'system-canvas-collab': path.resolve(__dirname, '../packages/collab/src'),
     },
+    // Single React instance across the aliased-from-source packages.
+    dedupe: ['react', 'react-dom'],
   },
 })

@@ -33,6 +33,7 @@ import { swimlaneRoot, swimlaneCanvasMap, swimlaneTheme } from './swimlane.js'
 import { nestedRoot, nestedCanvasMap } from './nested.js'
 import { showcaseRoot, showcaseCanvasMap, showcaseTheme } from './showcase.js'
 import { gatewayRoot, gatewayCanvasMap, gatewayTheme } from './gateway.js'
+import { CollabDemo } from './CollabDemo.js'
 
 const allThemes: Record<string, CanvasTheme> = {
   dark: darkTheme,
@@ -687,4 +688,9 @@ function App() {
 }
 
 const root = createRoot(document.getElementById('root')!)
-root.render(<App />)
+// `?mode=collab` mounts the self-contained Yjs multiplayer demo
+// (open in two tabs). It's a separate top-level route so it stays
+// isolated from the single-user `Mode` machinery above.
+const isCollab =
+  new URLSearchParams(window.location.search).get('mode') === 'collab'
+root.render(isCollab ? <CollabDemo /> : <App />)

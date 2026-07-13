@@ -10,6 +10,9 @@
   "dependencies": {
     "system-canvas": "*",
     "system-canvas-react": "*",
+    "system-canvas-collab": "*",
+    "yjs": "^13.6.0",
+    "y-protocols": "^1.0.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
