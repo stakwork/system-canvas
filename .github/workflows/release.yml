@@ -48,7 +48,7 @@ jobs:
           ROOT_VERSION=$(node -p "require('./package.json').version")
           echo "Root version: $ROOT_VERSION"
           FAIL=0
-          for pkg in packages/core packages/react packages/standalone; do
+          for pkg in packages/core packages/react packages/standalone packages/collab; do
             PKG_VERSION=$(node -p "require('./$pkg/package.json').version")
             if [ "$PKG_VERSION" != "$ROOT_VERSION" ]; then
               echo "::error file=$pkg/package.json::$pkg version ($PKG_VERSION) does not match root version ($ROOT_VERSION). Per-package version edits are not supported. See AGENTS.md > Versioning & releases."
@@ -121,6 +121,11 @@ jobs:
       - name: Publish system-canvas-standalone
         run: |
           cd packages/standalone
+          npm publish --provenance --access public
+
+      - name: Publish system-canvas-collab
+        run: |
+          cd packages/collab
           npm publish --provenance --access public
 
       - name: Push version bump + tag
