@@ -48,6 +48,7 @@ import {
 import type { AlignmentGuide } from 'system-canvas'
 import { useNavigation } from '../hooks/useNavigation.js'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts.js'
+import { useSearchHotkey } from '../hooks/useSearchHotkey.js'
 import { useCanvasInteraction } from '../hooks/useCanvasInteraction.js'
 import { useNodeDrag } from '../hooks/useNodeDrag.js'
 import { useNodeResize } from '../hooks/useNodeResize.js'
@@ -940,20 +941,14 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCanvasRef])
 
-  // Cmd+F / Ctrl+F global listener — opens search in both editable and read-only modes
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
-        e.preventDefault()
-        setSearchOpen((prev) => {
-          if (!prev) clearSelection()
-          return !prev
-        })
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  // Cmd+F / Ctrl+F — opens search in both editable and read-only modes, but
+  // only when the canvas owns focus. See `shouldHandleSearchHotkey`.
+  useSearchHotkey(containerRef, () => {
+    setSearchOpen((prev) => {
+      if (!prev) clearSelection()
+      return !prev
+    })
+  })
 
   // Cmd+Shift+C / Ctrl+Shift+C global listener — copies the current selection (or full
   // canvas) as a PNG image to the clipboard. Works in both editable and read-only modes.
