@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import type { CanvasTheme, ResolvedNode, ViewportState } from 'system-canvas'
+import type { BoundingBox, CanvasTheme, ResolvedNode, ViewportState } from 'system-canvas'
 import { computeBoundingBox } from 'system-canvas'
 
 interface MinimapProps {
@@ -16,6 +16,99 @@ interface MinimapProps {
 }
 
 const PAD = 20
+const GRID_SIZE = 8
+
+// ---------------------------------------------------------------------------
+// Pure helpers (module-level, independently unit-testable)
+// ---------------------------------------------------------------------------
+
+/**
+ * The viewport rect expressed in canvas world-space coordinates.
+ */
+export interface ViewportRect {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+/**
+ * Union the node-only bounding box with the current viewport rect so the
+ * combined bounds always contains both the node cluster and the visible area.
+ * Returns the expanded BoundingBox.
+ */
+export function computeUnionedBounds(
+  nodeBounds: BoundingBox,
+  viewport: ViewportRect
+): BoundingBox {
+  const minX = Math.min(nodeBounds.minX, viewport.left)
+  const minY = Math.min(nodeBounds.minY, viewport.top)
+  const maxX = Math.max(nodeBounds.maxX, viewport.left + viewport.width)
+  const maxY = Math.max(nodeBounds.maxY, viewport.top + viewport.height)
+  return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY }
+}
+
+/**
+ * Compute the mean width of non-group nodes.
+ * Falls back to averaging ALL nodes when the non-group set is empty (e.g. an
+ * all-group canvas) to avoid divide-by-zero / empty-mean.
+ * Returns 0 when `nodes` is empty.
+ */
+export function computeAvgNodeWidth(nodes: ResolvedNode[]): number {
+  if (nodes.length === 0) return 0
+  const leafNodes = nodes.filter((n) => n.type !== 'group')
+  const set = leafNodes.length > 0 ? leafNodes : nodes
+  return set.reduce((sum, n) => sum + n.width, 0) / set.length
+}
+
+/**
+ * Bucket node centers into an 8x8 grid spanning `bounds` and return a flat
+ * Float32Array of per-cell counts (row-major, length GRID_SIZE * GRID_SIZE).
+ * Every node (including group nodes) is counted — only the average excludes
+ * groups.
+ */
+export function bucketNodesIntoDensityGrid(
+  nodes: ResolvedNode[],
+  bounds: BoundingBox
+): Float32Array {
+  const cells = new Float32Array(GRID_SIZE * GRID_SIZE)
+  const bw = bounds.width || 1
+  const bh = bounds.height || 1
+  for (const node of nodes) {
+    const cx = node.x + node.width / 2
+    const cy = node.y + node.height / 2
+    const col = Math.min(
+      GRID_SIZE - 1,
+      Math.max(0, Math.floor(((cx - bounds.minX) / bw) * GRID_SIZE))
+    )
+    const row = Math.min(
+      GRID_SIZE - 1,
+      Math.max(0, Math.floor(((cy - bounds.minY) / bh) * GRID_SIZE))
+    )
+    cells[row * GRID_SIZE + col] += 1
+  }
+  return cells
+}
+
+/**
+ * Apply hysteresis logic to the current render mode.
+ * Enters grid mode when `value < enterThreshold`; exits only when
+ * `value > exitThreshold`.  Prevents flicker at the boundary.
+ */
+export function applyHysteresis(
+  current: 'dots' | 'grid',
+  value: number,
+  enterThreshold: number,
+  exitThreshold: number
+): 'dots' | 'grid' {
+  if (current === 'dots' && value < enterThreshold) return 'grid'
+  if (current === 'grid' && value > exitThreshold) return 'dots'
+  return current
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export function Minimap({
   nodes,
@@ -31,13 +124,25 @@ export function Minimap({
   const [hovered, setHovered] = useState(false)
   const draggingRef = useRef(false)
 
+  // Node-only bounds — recomputed when nodes change
   const boundsRef = useRef(computeBoundingBox(nodes))
   useEffect(() => {
     boundsRef.current = computeBoundingBox(nodes)
   }, [nodes])
 
+  // Last-good viewport-unioned bounds — populated each frame inside paint()
+  // when a valid SVG element and zoom are available.
+  const unionedBoundsRef = useRef<BoundingBox | null>(null)
+
+  // Hysteresis state for dots/grid render mode
+  const renderModeRef = useRef<'dots' | 'grid'>('dots')
+
+  // ---------------------------------------------------------------------------
+  // Coordinate helpers
+  // ---------------------------------------------------------------------------
+
   const toMinimap = useCallback(
-    (cx: number, cy: number, bounds: ReturnType<typeof computeBoundingBox>) => {
+    (cx: number, cy: number, bounds: BoundingBox) => {
       const bw = bounds.width || 1
       const bh = bounds.height || 1
       const scale = Math.min((width - PAD * 2) / bw, (height - PAD * 2) / bh)
@@ -53,7 +158,7 @@ export function Minimap({
   )
 
   const fromMinimap = useCallback(
-    (mx: number, my: number, bounds: ReturnType<typeof computeBoundingBox>) => {
+    (mx: number, my: number, bounds: BoundingBox) => {
       const bw = bounds.width || 1
       const bh = bounds.height || 1
       const scale = Math.min((width - PAD * 2) / bw, (height - PAD * 2) / bh)
@@ -67,6 +172,10 @@ export function Minimap({
     [width, height]
   )
 
+  // ---------------------------------------------------------------------------
+  // Paint loop
+  // ---------------------------------------------------------------------------
+
   const paint = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -79,42 +188,114 @@ export function Minimap({
     ctx.scale(dpr, dpr)
     ctx.clearRect(0, 0, width, height)
 
-    const bounds = boundsRef.current
-    if (bounds.width === 0 && bounds.height === 0) return
+    // Step 1: node-only bounds — basis for node drawing and density grid
+    const nodeBounds = boundsRef.current
+    if (nodeBounds.width === 0 && nodeBounds.height === 0) return
 
-    // Draw nodes
-    for (const node of nodes) {
-      const { x: mx, y: my, scale } = toMinimap(node.x, node.y, bounds)
-      const mw = node.width * scale
-      const mh = node.height * scale
-      const color = node.resolvedStroke ?? node.resolvedFill ?? theme.node.labelColor
-      ctx.fillStyle = color
-      ctx.globalAlpha = node.type === 'group' ? 0.15 : 0.6
-      const r = Math.min(2, (node.resolvedCornerRadius ?? 0) * scale)
-      roundRect(ctx, mx, my, Math.max(mw, 2), Math.max(mh, 2), r)
-      ctx.fill()
+    // Step 2: attempt to read SVG/viewport for the indicator
+    const svg = getSvgElement()
+    let validViewport = false
+    let vpRect: ViewportRect = { left: 0, top: 0, width: 0, height: 0 }
+
+    if (svg) {
+      const svgRect = svg.getBoundingClientRect()
+      const vp = getViewport()
+      if (Number.isFinite(vp.zoom) && vp.zoom > 0) {
+        vpRect = {
+          left: -vp.x / vp.zoom,
+          top: -vp.y / vp.zoom,
+          width: svgRect.width / vp.zoom,
+          height: svgRect.height / vp.zoom,
+        }
+        validViewport = true
+        // Cache unioned bounds for this frame (and for jumpTo)
+        unionedBoundsRef.current = computeUnionedBounds(nodeBounds, vpRect)
+      }
+    }
+
+    // Step 3: compute scale from node-only bounds
+    const bw = nodeBounds.width || 1
+    const bh = nodeBounds.height || 1
+    const scale = Math.min((width - PAD * 2) / bw, (height - PAD * 2) / bh)
+
+    // Step 4: decide render mode with hysteresis
+    const avgNodeWidth = computeAvgNodeWidth(nodes)
+    renderModeRef.current = applyHysteresis(
+      renderModeRef.current,
+      avgNodeWidth * scale,
+      3,
+      4
+    )
+
+    if (renderModeRef.current === 'grid') {
+      // --- Density grid mode ---
+      const cells = bucketNodesIntoDensityGrid(nodes, nodeBounds)
+      let maxCount = 0
+      for (let i = 0; i < cells.length; i++) {
+        if (cells[i] > maxCount) maxCount = cells[i]
+      }
+      if (maxCount > 0) {
+        const color = theme.node.labelColor
+        const cellW = ((width - PAD * 2) / GRID_SIZE)
+        const cellH = ((height - PAD * 2) / GRID_SIZE)
+        const ox = (width - bw * scale) / 2
+        const oy = (height - bh * scale) / 2
+        // The grid spans the same minimap-space extent as the node cluster
+        // (from toMinimap(nodeBounds.minX, nodeBounds.minY) to
+        //  toMinimap(nodeBounds.maxX, nodeBounds.maxY))
+        const startX = ox
+        const startY = oy
+        const gridW = bw * scale
+        const gridH = bh * scale
+        const gcW = gridW / GRID_SIZE
+        const gcH = gridH / GRID_SIZE
+
+        ctx.fillStyle = color
+        for (let row = 0; row < GRID_SIZE; row++) {
+          for (let col = 0; col < GRID_SIZE; col++) {
+            const count = cells[row * GRID_SIZE + col]
+            if (count === 0) continue
+            const alpha = Math.max(0.15, count / maxCount)
+            ctx.globalAlpha = alpha
+            const rx = startX + col * gcW
+            const ry = startY + row * gcH
+            roundRect(ctx, rx, ry, gcW, gcH, 1)
+            ctx.fill()
+          }
+        }
+        // suppress unused-variable warning — cellW/cellH replaced by gcW/gcH above
+        void cellW
+        void cellH
+      }
+    } else {
+      // --- Dots mode (unchanged from original) ---
+      for (const node of nodes) {
+        const { x: mx, y: my, scale: s } = toMinimap(node.x, node.y, nodeBounds)
+        const mw = node.width * s
+        const mh = node.height * s
+        const color = node.resolvedStroke ?? node.resolvedFill ?? theme.node.labelColor
+        ctx.fillStyle = color
+        ctx.globalAlpha = node.type === 'group' ? 0.15 : 0.6
+        const r = Math.min(2, (node.resolvedCornerRadius ?? 0) * s)
+        roundRect(ctx, mx, my, Math.max(mw, 2), Math.max(mh, 2), r)
+        ctx.fill()
+      }
     }
     ctx.globalAlpha = 1
 
-    // Draw viewport indicator
-    const vp = getViewport()
-    const svg = getSvgElement()
-    if (!svg) return
-    const rect = svg.getBoundingClientRect()
-    const vpLeft = -vp.x / vp.zoom
-    const vpTop = -vp.y / vp.zoom
-    const vpWidth = rect.width / vp.zoom
-    const vpHeight = rect.height / vp.zoom
-
-    const tl = toMinimap(vpLeft, vpTop, bounds)
-    const vw = vpWidth * tl.scale
-    const vh = vpHeight * tl.scale
+    // Step 5: draw viewport indicator — only when we have a valid viewport
+    if (!validViewport) return
+    const indicatorBounds = unionedBoundsRef.current ?? nodeBounds
+    const tl = toMinimap(vpRect.left, vpRect.top, indicatorBounds)
+    const vw = (vpRect.width / (indicatorBounds.width || 1)) * (width - PAD * 2)
+    const vh = (vpRect.height / (indicatorBounds.height || 1)) * (height - PAD * 2)
 
     ctx.strokeStyle = theme.node.labelColor
     ctx.lineWidth = 1.5
     ctx.globalAlpha = 0.7
     roundRect(ctx, tl.x, tl.y, vw, vh, 2)
     ctx.stroke()
+    ctx.globalAlpha = 1
   }, [nodes, theme, width, height, getViewport, getSvgElement, toMinimap])
 
   // rAF loop for painting
@@ -128,6 +309,10 @@ export function Minimap({
     return () => cancelAnimationFrame(raf)
   }, [paint])
 
+  // ---------------------------------------------------------------------------
+  // Jump-to navigation
+  // ---------------------------------------------------------------------------
+
   const jumpTo = useCallback(
     (e: React.MouseEvent | MouseEvent) => {
       const container = containerRef.current
@@ -136,7 +321,11 @@ export function Minimap({
       const rect = container.getBoundingClientRect()
       const mx = e.clientX - rect.left
       const my = e.clientY - rect.top
-      const bounds = boundsRef.current
+
+      // Use the same unioned bounds that paint() last drew the indicator with.
+      // Fall back to node-only bounds if paint() hasn't populated the ref yet
+      // (e.g. click before first rAF tick).
+      const bounds = unionedBoundsRef.current ?? boundsRef.current
       const { cx, cy } = fromMinimap(mx, my, bounds)
 
       const svgRect = svg.getBoundingClientRect()
@@ -186,7 +375,10 @@ export function Minimap({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerEnter={() => setHovered(true)}
-      onPointerLeave={() => { setHovered(false); draggingRef.current = false }}
+      onPointerLeave={() => {
+        setHovered(false)
+        draggingRef.current = false
+      }}
       style={{
         position: 'absolute',
         bottom: 12,
@@ -216,6 +408,10 @@ export function Minimap({
     </div>
   )
 }
+
+// ---------------------------------------------------------------------------
+// Canvas drawing helper (unchanged)
+// ---------------------------------------------------------------------------
 
 function roundRect(
   ctx: CanvasRenderingContext2D,
