@@ -123,10 +123,13 @@ jobs:
           cd packages/standalone
           npm publish --provenance --access public
 
-      - name: Publish system-canvas-collab
-        run: |
-          cd packages/collab
-          npm publish --provenance --access public
+      # system-canvas-collab is intentionally not published here. npm trusted
+      # publishing can only authenticate a package that already exists on the
+      # registry with this repo bound to it, and collab has never been
+      # published — so the step failed with ENEEDAUTH and, because publishing
+      # runs before the push below, left the version bump unpushed. Restore
+      # this step once collab has been published manually once and had its
+      # trusted publisher configured. It stays version-synced meanwhile.
 
       - name: Push version bump + tag
         run: git push --follow-tags origin main
