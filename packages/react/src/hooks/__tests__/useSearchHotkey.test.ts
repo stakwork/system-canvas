@@ -22,6 +22,10 @@ function appendTo(parent: HTMLElement, tag: string): HTMLElement {
   return el
 }
 
+function click(target: EventTarget): void {
+  target.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+}
+
 function pressCmdF(target: EventTarget): boolean {
   const e = new KeyboardEvent('keydown', {
     key: 'f',
@@ -50,41 +54,38 @@ describe('shouldHandleSearchHotkey', () => {
 
   it('handles the key when the target is inside the canvas', () => {
     const node = appendTo(container, 'div')
-    expect(shouldHandleSearchHotkey(node, container)).toBe(true)
+    expect(shouldHandleSearchHotkey(node, container, false)).toBe(true)
   })
 
-  it('handles the key when nothing is focused', () => {
-    expect(shouldHandleSearchHotkey(document.body, container)).toBe(true)
+  it('defers to canvasActive when nothing is focused', () => {
+    // Most host-app chrome is not focusable, so a click on it leaves the
+    // keystroke on <body> — indistinguishable from "never clicked anything".
+    expect(shouldHandleSearchHotkey(document.body, container, true)).toBe(true)
+    expect(shouldHandleSearchHotkey(document.body, container, false)).toBe(false)
   })
 
   it('ignores the key while typing in a textarea outside the canvas', () => {
-    // The reported bug: a chat panel rendered next to the canvas.
     const chat = appendTo(document.body, 'div')
     const textarea = appendTo(chat, 'textarea')
-    expect(shouldHandleSearchHotkey(textarea, container)).toBe(false)
+    expect(shouldHandleSearchHotkey(textarea, container, true)).toBe(false)
   })
 
   it('ignores the key while typing in an input, even inside the canvas', () => {
-    // The canvas' own search overlay is an input — Cmd+F there is the
-    // browser's to handle, not another toggle.
+    // The canvas' own search overlay is an input — Cmd+F there belongs to the
+    // browser, not to another toggle.
     const input = appendTo(container, 'input')
-    expect(shouldHandleSearchHotkey(input, container)).toBe(false)
+    expect(shouldHandleSearchHotkey(input, container, true)).toBe(false)
   })
 
   it('ignores the key in a contentEditable region', () => {
     const editable = appendTo(document.body, 'div')
     Object.defineProperty(editable, 'isContentEditable', { value: true })
-    expect(shouldHandleSearchHotkey(editable, container)).toBe(false)
+    expect(shouldHandleSearchHotkey(editable, container, true)).toBe(false)
   })
 
-  it('ignores the key when focus is elsewhere in the host app', () => {
+  it('ignores the key when a focusable element elsewhere has focus', () => {
     const sidebarButton = appendTo(appendTo(document.body, 'aside'), 'button')
-    expect(shouldHandleSearchHotkey(sidebarButton, container)).toBe(false)
-  })
-
-  it('falls back to handling the key when there is no container yet', () => {
-    const anywhere = appendTo(document.body, 'div')
-    expect(shouldHandleSearchHotkey(anywhere, null)).toBe(true)
+    expect(shouldHandleSearchHotkey(sidebarButton, container, false)).toBe(false)
   })
 })
 
@@ -94,15 +95,70 @@ describe('shouldHandleSearchHotkey', () => {
 
 describe('useSearchHotkey', () => {
   let container: HTMLElement
+  let chatPanel: HTMLElement
 
   beforeEach(() => {
     container = makeCanvas()
+    chatPanel = appendTo(document.body, 'div')
   })
 
-  it('toggles and preventDefaults for a keystroke inside the canvas', () => {
-    const onToggle = vi.fn()
-    renderHook(() => useSearchHotkey({ current: container }, onToggle))
+  function mount(onToggle: () => void) {
+    return renderHook(() => useSearchHotkey({ current: container }, onToggle))
+  }
 
+  it('does nothing before the canvas has been clicked', () => {
+    const onToggle = vi.fn()
+    mount(onToggle)
+
+    const prevented = pressCmdF(document.body)
+
+    expect(onToggle).not.toHaveBeenCalled()
+    // The host app keeps native find.
+    expect(prevented).toBe(false)
+  })
+
+  it('toggles after the canvas is clicked', () => {
+    const onToggle = vi.fn()
+    mount(onToggle)
+
+    click(appendTo(container, 'div'))
+    const prevented = pressCmdF(document.body)
+
+    expect(onToggle).toHaveBeenCalledTimes(1)
+    expect(prevented).toBe(true)
+  })
+
+  it('stops toggling once a non-focusable part of the host app is clicked', () => {
+    // The reported case: clicking anywhere in the chat panel — not just its
+    // textarea — must hand Cmd+F back to the browser.
+    const onToggle = vi.fn()
+    mount(onToggle)
+
+    click(appendTo(container, 'div'))
+    click(appendTo(chatPanel, 'div'))
+    const prevented = pressCmdF(document.body)
+
+    expect(onToggle).not.toHaveBeenCalled()
+    expect(prevented).toBe(false)
+  })
+
+  it('does not toggle from a chat textarea even when the canvas was clicked last', () => {
+    const onToggle = vi.fn()
+    mount(onToggle)
+
+    click(appendTo(container, 'div'))
+    const textarea = appendTo(chatPanel, 'textarea')
+    const prevented = pressCmdF(textarea)
+
+    expect(onToggle).not.toHaveBeenCalled()
+    expect(prevented).toBe(false)
+  })
+
+  it('toggles when focus is inside the canvas regardless of click history', () => {
+    const onToggle = vi.fn()
+    mount(onToggle)
+
+    click(appendTo(chatPanel, 'div'))
     const node = appendTo(container, 'div')
     const prevented = pressCmdF(node)
 
@@ -110,27 +166,15 @@ describe('useSearchHotkey', () => {
     expect(prevented).toBe(true)
   })
 
-  it('does not toggle or preventDefault from a chat textarea', () => {
-    const onToggle = vi.fn()
-    renderHook(() => useSearchHotkey({ current: container }, onToggle))
-
-    const textarea = appendTo(appendTo(document.body, 'div'), 'textarea')
-    const prevented = pressCmdF(textarea)
-
-    expect(onToggle).not.toHaveBeenCalled()
-    // Native find must stay available to the host app.
-    expect(prevented).toBe(false)
-  })
-
   it('ignores other keys and unmodified f', () => {
     const onToggle = vi.fn()
-    renderHook(() => useSearchHotkey({ current: container }, onToggle))
+    mount(onToggle)
+    click(appendTo(container, 'div'))
 
-    const node = appendTo(container, 'div')
-    node.dispatchEvent(
+    document.body.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'f', bubbles: true, cancelable: true }),
     )
-    node.dispatchEvent(
+    document.body.dispatchEvent(
       new KeyboardEvent('keydown', {
         key: 'g',
         metaKey: true,
@@ -144,12 +188,11 @@ describe('useSearchHotkey', () => {
 
   it('stops listening after unmount', () => {
     const onToggle = vi.fn()
-    const { unmount } = renderHook(() =>
-      useSearchHotkey({ current: container }, onToggle),
-    )
+    const { unmount } = mount(onToggle)
+    click(appendTo(container, 'div'))
     unmount()
 
-    pressCmdF(appendTo(container, 'div'))
+    pressCmdF(document.body)
     expect(onToggle).not.toHaveBeenCalled()
   })
 
@@ -162,7 +205,8 @@ describe('useSearchHotkey', () => {
     )
 
     rerender({ cb: second })
-    pressCmdF(appendTo(container, 'div'))
+    click(appendTo(container, 'div'))
+    pressCmdF(document.body)
 
     expect(first).not.toHaveBeenCalled()
     expect(second).toHaveBeenCalledTimes(1)

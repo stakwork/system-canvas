@@ -9,12 +9,17 @@ import { useEffect, useRef, type RefObject } from 'react'
  * — a chat panel, a sidebar — and hijacking Cmd+F there both opens the wrong
  * search and suppresses the browser's native find.
  *
- * Handle the key when the canvas owns focus, or when nothing does; leave it
- * alone when focus sits in a text field or elsewhere in the host app.
+ * Focus alone isn't enough to tell the two apart: most of a host app's chrome
+ * isn't focusable, so clicking it leaves the keystroke on `<body>`, exactly as
+ * if the user had never clicked anything. Hence `canvasActive`, which the hook
+ * derives from where the last pointerdown landed.
+ *
+ * @param canvasActive whether the canvas was the last region the user clicked
  */
 export function shouldHandleSearchHotkey(
   target: EventTarget | null,
   container: HTMLElement | null,
+  canvasActive: boolean,
 ): boolean {
   const el = target instanceof HTMLElement ? target : null
 
@@ -26,37 +31,57 @@ export function shouldHandleSearchHotkey(
     return false
   }
 
-  // No container to compare against, or a target we can't place: assume the
-  // canvas is the whole page (demo, standalone build) and keep the old behaviour.
-  if (!container || !el) return true
+  // Focus sits inside the canvas — unambiguous, regardless of click history.
+  if (container && el && container.contains(el)) return true
 
-  // Keydowns land on <body> when nothing is focused.
-  if (el === document.body || el === document.documentElement) return true
-
-  return container.contains(el)
+  return canvasActive
 }
 
 /**
  * Cmd+F / Ctrl+F toggles the canvas search overlay, in both editable and
- * read-only modes.
+ * read-only modes, when the canvas is the region the user is working in.
+ *
+ * Starts inactive: an embedded canvas never claims Cmd+F until it has been
+ * clicked, so the host app keeps the browser's native find until then.
  */
 export function useSearchHotkey(
   containerRef: RefObject<HTMLElement | null>,
   onToggle: () => void,
 ): void {
   // Kept in a ref so a caller passing an inline closure doesn't re-subscribe
-  // the window listener on every render.
+  // the window listeners on every render.
   const toggleRef = useRef(onToggle)
   toggleRef.current = onToggle
 
+  const canvasActiveRef = useRef(false)
+
   useEffect(() => {
+    const onPointerDown = (e: PointerEvent) => {
+      const container = containerRef.current
+      const el = e.target instanceof HTMLElement ? e.target : null
+      canvasActiveRef.current = !!container && !!el && container.contains(el)
+    }
+
     const onKey = (e: KeyboardEvent) => {
       if (!((e.metaKey || e.ctrlKey) && e.key === 'f')) return
-      if (!shouldHandleSearchHotkey(e.target, containerRef.current)) return
+      if (
+        !shouldHandleSearchHotkey(
+          e.target,
+          containerRef.current,
+          canvasActiveRef.current,
+        )
+      ) {
+        return
+      }
       e.preventDefault()
       toggleRef.current()
     }
+
+    window.addEventListener('pointerdown', onPointerDown, true)
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown, true)
+      window.removeEventListener('keydown', onKey)
+    }
   }, [containerRef])
 }
