@@ -22,6 +22,13 @@ function appendTo(parent: HTMLElement, tag: string): HTMLElement {
   return el
 }
 
+/** Viewport renders an <svg>, NodeRenderer a <g> — canvas clicks are SVG. */
+function appendSvgTo(parent: Element, tag: string): SVGElement {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag)
+  parent.appendChild(el)
+  return el
+}
+
 function click(target: EventTarget): void {
   target.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
 }
@@ -210,5 +217,40 @@ describe('useSearchHotkey', () => {
 
     expect(first).not.toHaveBeenCalled()
     expect(second).toHaveBeenCalledTimes(1)
+  })
+
+  it('toggles after a node is clicked', () => {
+    const onToggle = vi.fn()
+    mount(onToggle)
+
+    const svg = appendSvgTo(container, 'svg')
+    click(appendSvgTo(svg, 'g'))
+    const prevented = pressCmdF(document.body)
+
+    expect(onToggle).toHaveBeenCalledTimes(1)
+    expect(prevented).toBe(true)
+  })
+
+  it('toggles after the empty canvas surface is clicked', () => {
+    const onToggle = vi.fn()
+    mount(onToggle)
+
+    click(appendSvgTo(container, 'svg'))
+    const prevented = pressCmdF(document.body)
+
+    expect(onToggle).toHaveBeenCalledTimes(1)
+    expect(prevented).toBe(true)
+  })
+
+  it('still hands Cmd+F back after a canvas click then a host-app click', () => {
+    const onToggle = vi.fn()
+    mount(onToggle)
+
+    click(appendSvgTo(container, 'svg'))
+    click(appendTo(chatPanel, 'div'))
+    const prevented = pressCmdF(document.body)
+
+    expect(onToggle).not.toHaveBeenCalled()
+    expect(prevented).toBe(false)
   })
 })
