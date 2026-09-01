@@ -82,6 +82,29 @@ import { CollaboratorsOverlay } from './CollaboratorsOverlay.js'
 import { ExportButton, type ExportButtonRenderProps } from './ExportButton.js'
 import { exportAsJSON, parseCanvasFile, exportAsPNG, copyAsImage, exportAsSVG } from '../export/index.js'
 
+/**
+ * Union an external emphasis set with the internal search-derived set.
+ *
+ * Returns `internal` unchanged (same reference — zero allocation, no
+ * re-render churn) when `external` is undefined or empty; otherwise a new
+ * Set containing every id from both inputs.
+ *
+ * Exported from this module for unit tests only — it is deliberately NOT
+ * part of the published package API (`packages/core`'s index.ts): a generic
+ * set-union is not search logic, and core stays untouched by emphasis
+ * merging.
+ */
+export function unionIdSets(
+  internal?: Set<string>,
+  external?: Set<string>
+): Set<string> | undefined {
+  if (!external || external.size === 0) return internal
+  if (!internal || internal.size === 0) return new Set(external)
+  const merged = new Set(internal)
+  for (const id of external) merged.add(id)
+  return merged
+}
+
 export interface SystemCanvasProps {
   /** Canvas data to render */
   canvas: CanvasData
@@ -458,6 +481,48 @@ export interface SystemCanvasProps {
   /** Show a bird's-eye minimap in the bottom-left corner. Default false. */
   showMinimap?: boolean
 
+  // --- External emphasis (render-only) ---
+  /**
+   * Node ids that should render dimmed, driven by the host application's own
+   * state (an external search, filter, or agent-driven focus).
+   *
+   * **Union-merge semantics:** these ids merge (union) with the dim set the
+   * library derives from its internal Cmd+F search, so both sources can be
+   * active simultaneously and search keeps working unchanged.
+   *
+   * **Render-only:** dimming never moves nodes, affects layout or auto-fit,
+   * or changes selection, click, drag, or editing behaviour. It does
+   * propagate visually to edges connected to dimmed nodes (dotted, faded),
+   * matching internal search behaviour.
+   *
+   * Omitting the prop or passing an empty set is a no-op. Prefer a stable
+   * `Set` identity across renders as a perf courtesy — an unstable set
+   * merely recomputes the merge memo each render, which is tolerable
+   * (Viewport is not memoized and already re-renders with SystemCanvas).
+   */
+  dimmedNodeIds?: Set<string>
+
+  /**
+   * Node ids that should render with the highlight ring (the same animated
+   * ring built-in search matches get), driven by the host application's own
+   * state.
+   *
+   * **Union-merge semantics:** these ids merge (union) with the highlight
+   * set the library derives from its internal Cmd+F search.
+   *
+   * **Render-only:** highlighting never pans the viewport, alters match
+   * counts, or changes selection behaviour.
+   *
+   * A node present in BOTH sets renders both visuals — dim opacity with the
+   * highlight ring nested inside the dimmed group, so the ring inherits the
+   * dim opacity (identical to what built-in search renders today for a
+   * query match on a hidden-category node). Omitting the prop or passing an
+   * empty set is a no-op. Prefer a stable `Set` identity across renders as
+   * a perf courtesy — unstable Sets merely recompute the merge memo each
+   * render (tolerable, not required).
+   */
+  highlightedNodeIds?: Set<string>
+
   // --- Styling ---
   className?: string
   style?: React.CSSProperties
@@ -573,6 +638,8 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
       onRedo,
       collaborators = [],
       showMinimap = false,
+      dimmedNodeIds,
+      highlightedNodeIds,
       className,
       style,
     },
@@ -1088,6 +1155,21 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
   const { matchingIds, dimmedIds } = useMemo(
     () => computeNodeFilter(nodes, searchOpen ? searchQuery : '', hiddenCategories),
     [nodes, searchQuery, searchOpen, hiddenCategories]
+  )
+
+  // External emphasis (render-only). Union-merge the host-provided dim/highlight
+  // sets with the internal search-derived sets. Deliberately NOT folded into
+  // `computeNodeFilter` above: `matchingIds` feeds the auto-pan-to-single-match
+  // effect, `matchCount`, and `activeMatchId` — all of which must stay strictly
+  // search-owned so external emphasis can never pan the viewport or alter match
+  // counts.
+  const mergedDimmedIds = useMemo(
+    () => unionIdSets(dimmedIds, dimmedNodeIds),
+    [dimmedIds, dimmedNodeIds]
+  )
+  const mergedHighlightedIds = useMemo(
+    () => unionIdSets(matchingIds, highlightedNodeIds),
+    [matchingIds, highlightedNodeIds]
   )
 
   const matchingIdsArray = useMemo(() => Array.from(matchingIds), [matchingIds])
@@ -2042,8 +2124,8 @@ export const SystemCanvas = forwardRef<SystemCanvasHandle, SystemCanvasProps>(
         }
         edgeCreateEnabled={editable}
         alignmentGuides={editable ? alignmentGuides : undefined}
-        dimmedNodeIds={dimmedIds}
-        highlightedNodeIds={matchingIds}
+        dimmedNodeIds={mergedDimmedIds}
+        highlightedNodeIds={mergedHighlightedIds}
         activeMatchNodeId={activeMatchId}
         viewportState={collaboratorViewport}
       />
