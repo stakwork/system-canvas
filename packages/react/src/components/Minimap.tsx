@@ -18,6 +18,11 @@ interface MinimapProps {
 const PAD = 20
 const GRID_SIZE = 8
 
+interface SvgSize {
+  width: number
+  height: number
+}
+
 // ---------------------------------------------------------------------------
 // Pure helpers (module-level, independently unit-testable)
 // ---------------------------------------------------------------------------
@@ -176,41 +181,43 @@ export function Minimap({
   // Paint loop
   // ---------------------------------------------------------------------------
 
-  const paint = useCallback(() => {
+  // Draws one frame for the given viewport and SVG size. Called by the loop
+  // below only when one of its inputs has changed.
+  const paint = useCallback((vp: ViewportState, svgSize: SvgSize | null, dpr: number) => {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const dpr = window.devicePixelRatio || 1
-    canvas.width = width * dpr
-    canvas.height = height * dpr
-    ctx.scale(dpr, dpr)
+    // Assigning canvas.width reallocates the backing store, so only do it
+    // when the size actually changes.
+    const pxW = Math.round(width * dpr)
+    const pxH = Math.round(height * dpr)
+    if (canvas.width !== pxW || canvas.height !== pxH) {
+      canvas.width = pxW
+      canvas.height = pxH
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.clearRect(0, 0, width, height)
 
     // Step 1: node-only bounds — basis for node drawing and density grid
     const nodeBounds = boundsRef.current
     if (nodeBounds.width === 0 && nodeBounds.height === 0) return
 
-    // Step 2: attempt to read SVG/viewport for the indicator
-    const svg = getSvgElement()
+    // Step 2: viewport rect for the indicator, when the SVG has been measured
     let validViewport = false
     let vpRect: ViewportRect = { left: 0, top: 0, width: 0, height: 0 }
 
-    if (svg) {
-      const svgRect = svg.getBoundingClientRect()
-      const vp = getViewport()
-      if (Number.isFinite(vp.zoom) && vp.zoom > 0) {
-        vpRect = {
-          left: -vp.x / vp.zoom,
-          top: -vp.y / vp.zoom,
-          width: svgRect.width / vp.zoom,
-          height: svgRect.height / vp.zoom,
-        }
-        validViewport = true
-        // Cache unioned bounds for this frame (and for jumpTo)
-        unionedBoundsRef.current = computeUnionedBounds(nodeBounds, vpRect)
+    if (svgSize && Number.isFinite(vp.zoom) && vp.zoom > 0) {
+      vpRect = {
+        left: -vp.x / vp.zoom,
+        top: -vp.y / vp.zoom,
+        width: svgSize.width / vp.zoom,
+        height: svgSize.height / vp.zoom,
       }
+      validViewport = true
+      // Cache unioned bounds for this frame (and for jumpTo)
+      unionedBoundsRef.current = computeUnionedBounds(nodeBounds, vpRect)
     }
 
     // Step 3: compute scale from node-only bounds
@@ -296,17 +303,52 @@ export function Minimap({
     roundRect(ctx, tl.x, tl.y, vw, vh, 2)
     ctx.stroke()
     ctx.globalAlpha = 1
-  }, [nodes, theme, width, height, getViewport, getSvgElement, toMinimap])
+  }, [nodes, theme, width, height, toMinimap])
 
-  // rAF loop for painting
+  // SystemCanvas passes these as fresh closures each render; read them via
+  // refs so a parent re-render doesn't restart the loop or force a repaint.
+  const getViewportRef = useRef(getViewport)
+  getViewportRef.current = getViewport
+  const getSvgElementRef = useRef(getSvgElement)
+  getSvgElementRef.current = getSvgElement
+
+  // rAF loop: polls the viewport (a ref read) each frame and repaints only
+  // when it, the SVG size or the device pixel ratio changed. A change to
+  // `paint` (nodes, theme, size) restarts the effect and repaints once.
   useEffect(() => {
     let raf = 0
+    let observedSvg: SVGSVGElement | null = null
+    let svgSize: SvgSize | null = null
+    let lastKey = ''
+    const ro = new ResizeObserver(([entry]) => {
+      svgSize = { width: entry.contentRect.width, height: entry.contentRect.height }
+    })
     const tick = () => {
-      paint()
+      const svg = getSvgElementRef.current()
+      if (svg !== observedSvg) {
+        ro.disconnect()
+        observedSvg = svg
+        svgSize = null
+        if (svg) {
+          const r = svg.getBoundingClientRect()
+          svgSize = { width: r.width, height: r.height }
+          ro.observe(svg)
+        }
+      }
+      const vp = getViewportRef.current()
+      const dpr = window.devicePixelRatio || 1
+      const key = `${vp.x},${vp.y},${vp.zoom},${svgSize?.width},${svgSize?.height},${dpr}`
+      if (key !== lastKey) {
+        lastKey = key
+        paint(vp, svgSize, dpr)
+      }
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
+    return () => {
+      cancelAnimationFrame(raf)
+      ro.disconnect()
+    }
   }, [paint])
 
   // ---------------------------------------------------------------------------
