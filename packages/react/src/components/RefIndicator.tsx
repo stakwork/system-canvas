@@ -1,4 +1,5 @@
 import React, { useId, useState } from 'react'
+import { getNodeLabel } from 'system-canvas'
 import type { ResolvedNode, CanvasTheme } from 'system-canvas'
 
 type Corner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
@@ -32,7 +33,9 @@ interface RefIndicatorProps {
  * Renders as two short lines that continue the node's own stroke to form
  * a small square, with the configured arrow glyph inside.
  *
- * Hovering fills the square with a subtle tint for affordance.
+ * Hovering fills the square with a subtle tint for affordance. Exposed as
+ * a named button so screen readers and accessibility-tree browser agents
+ * can find the drill-in.
  * Stops pointer/mouse event propagation so it doesn't trigger node drag
  * or node click handlers.
  */
@@ -185,6 +188,8 @@ export function RefIndicator({
   return (
     <g
       className="system-canvas-ref-indicator"
+      role="button"
+      aria-label={`Open ${getNodeLabel(node).replace(/^#+\s*/, '')}`}
       style={{ cursor: 'pointer' }}
       onClick={(e) => {
         e.stopPropagation()
