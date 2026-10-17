@@ -97,7 +97,7 @@ interface ViewportProps {
   handoffFadeMs?: number
   onNodeClick: (node: ResolvedNode, event: React.MouseEvent) => void
   onNodeDoubleClick: (node: ResolvedNode, event: React.MouseEvent) => void
-  onNodeNavigate: (node: ResolvedNode, event: React.MouseEvent) => void
+  onNodeNavigate: (node: ResolvedNode, event: React.MouseEvent | React.KeyboardEvent) => void
   onEdgeClick: (edge: CanvasEdge, event: React.MouseEvent) => void
   onEdgeDoubleClick?: (edge: CanvasEdge, event: React.MouseEvent) => void
   onCanvasClick?: (event: React.MouseEvent) => void

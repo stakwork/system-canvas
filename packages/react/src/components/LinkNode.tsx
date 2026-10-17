@@ -16,7 +16,7 @@ interface LinkNodeProps {
   onClick: (node: ResolvedNode, event: React.MouseEvent) => void
   onDoubleClick: (node: ResolvedNode, event: React.MouseEvent) => void
   onContextMenu: (node: ResolvedNode, event: React.MouseEvent) => void
-  onNavigate: (node: ResolvedNode, event: React.MouseEvent) => void
+  onNavigate: (node: ResolvedNode, event: React.MouseEvent | React.KeyboardEvent) => void
   onPointerDown?: (node: ResolvedNode, event: React.PointerEvent) => void
   isSelected?: boolean
   isEditing?: boolean

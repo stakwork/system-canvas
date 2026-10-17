@@ -36,7 +36,7 @@ interface UseCanvasInteractionOptions {
 interface UseCanvasInteractionResult {
   handleNodeClick: (node: ResolvedNode, event: React.MouseEvent) => void
   handleNodeDoubleClick: (node: ResolvedNode, event: React.MouseEvent) => void
-  handleNodeNavigate: (node: ResolvedNode, event: React.MouseEvent) => void
+  handleNodeNavigate: (node: ResolvedNode, event: React.MouseEvent | React.KeyboardEvent) => void
   handleEdgeClick: (edge: CanvasEdge, event: React.MouseEvent) => void
   handleEdgeDoubleClick: (edge: CanvasEdge, event: React.MouseEvent) => void
   handleCanvasContextMenu: (event: React.MouseEvent) => void
@@ -95,7 +95,7 @@ export function useCanvasInteraction(
   )
 
   const handleNodeNavigate = useCallback(
-    (node: ResolvedNode, _event: React.MouseEvent) => {
+    (node: ResolvedNode, _event: React.MouseEvent | React.KeyboardEvent) => {
       if (node.isNavigable) {
         onNavigableNodeClick?.(node)
       }

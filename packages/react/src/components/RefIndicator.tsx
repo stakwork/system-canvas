@@ -1,4 +1,5 @@
 import React, { useId, useState } from 'react'
+import { getNodeLabel } from 'system-canvas'
 import type { ResolvedNode, CanvasTheme } from 'system-canvas'
 
 type Corner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
@@ -23,8 +24,11 @@ interface RefIndicatorProps {
    * proportionally with the carve.
    */
   size?: number
-  /** Fired when the user clicks the indicator. The parent should navigate. */
-  onNavigate: (node: ResolvedNode, event: React.MouseEvent) => void
+  /**
+   * Fired when the user clicks the indicator, or presses Enter/Space while
+   * it has focus. The parent should navigate.
+   */
+  onNavigate: (node: ResolvedNode, event: React.MouseEvent | React.KeyboardEvent) => void
 }
 
 /**
@@ -32,7 +36,9 @@ interface RefIndicatorProps {
  * Renders as two short lines that continue the node's own stroke to form
  * a small square, with the configured arrow glyph inside.
  *
- * Hovering fills the square with a subtle tint for affordance.
+ * Hovering (or keyboard focus) fills the square with a subtle tint for
+ * affordance. Exposed as a named button so keyboard users, screen readers
+ * and accessibility-tree browser agents can reach the drill-in.
  * Stops pointer/mouse event propagation so it doesn't trigger node drag
  * or node click handlers.
  */
@@ -185,11 +191,22 @@ export function RefIndicator({
   return (
     <g
       className="system-canvas-ref-indicator"
-      style={{ cursor: 'pointer' }}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open ${getNodeLabel(node).replace(/^#+\s*/, '')}`}
+      style={{ cursor: 'pointer', outline: 'none' }}
       onClick={(e) => {
         e.stopPropagation()
         onNavigate(node, e)
       }}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return
+        e.preventDefault()
+        e.stopPropagation()
+        onNavigate(node, e)
+      }}
+      onFocus={() => setHover(true)}
+      onBlur={() => setHover(false)}
       onDoubleClick={stopAll}
       onPointerDown={stopAll}
       onMouseDown={stopAll}
