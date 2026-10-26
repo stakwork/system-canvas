@@ -51,6 +51,13 @@ interface NodeRendererProps {
 }
 
 /**
+ * Mount fade-in duration for nodes, kept in sync with the transition string
+ * used in `MemoizedNode`'s mount effect. The fade-clear timer fires at
+ * `MOUNT_FADE_MS + 16` (one frame of headroom).
+ */
+const MOUNT_FADE_MS = 200
+
+/**
  * Renders all nodes, dispatching to the appropriate type-specific component.
  * Groups are rendered first (lower z-index), then other nodes in array order.
  *
@@ -104,6 +111,7 @@ const MemoizedNode = React.memo(function MemoizedNode({
 }) {
   const gRef = useRef<SVGGElement>(null)
   const mountedRef = useRef(false)
+  const fadeClearTimerRef = useRef<number | null>(null)
 
   useEffect(() => {
     const g = gRef.current
@@ -114,17 +122,45 @@ const MemoizedNode = React.memo(function MemoizedNode({
     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
     g.getBoundingClientRect()
     requestAnimationFrame(() => {
-      g.style.transition = 'opacity 200ms cubic-bezier(0.22, 1, 0.36, 1)'
+      g.style.transition = `opacity ${MOUNT_FADE_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`
       g.style.opacity = isDimmed ? '0.15' : '1'
+      // Clear the inline styles once the mount fade finishes so the SVG
+      // presentation attribute (`opacity={isDimmed ? 0.15 : 1}`) governs
+      // every subsequent dim/undim flip. Inline style wins the CSS cascade
+      // over the attribute, so leaving it in place would freeze whatever
+      // opacity the node was mounted with — a node already on screen could
+      // never visually dim or undim. Mirrors the clear-after-fade pattern
+      // in Viewport's `triggerFade`.
+      fadeClearTimerRef.current = window.setTimeout(() => {
+        g.style.transition = ''
+        g.style.opacity = ''
+        fadeClearTimerRef.current = null
+      }, MOUNT_FADE_MS + 16)
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const g = gRef.current
     if (!g || !isExiting) return
+    // Cancel a pending mount-fade clear so a late inline-style write can't
+    // interrupt the in-flight exit fade.
+    if (fadeClearTimerRef.current !== null) {
+      clearTimeout(fadeClearTimerRef.current)
+      fadeClearTimerRef.current = null
+    }
     g.style.transition = 'opacity 150ms ease-in'
     g.style.opacity = '0'
   }, [isExiting])
+
+  // Unmount: cancel the pending clear so it never fires on a detached node.
+  useEffect(() => {
+    return () => {
+      if (fadeClearTimerRef.current !== null) {
+        clearTimeout(fadeClearTimerRef.current)
+        fadeClearTimerRef.current = null
+      }
+    }
+  }, [])
 
   const slots = getCategorySlots(node, theme)
   const reservations = computeReflowReservations(node, theme, slots)
