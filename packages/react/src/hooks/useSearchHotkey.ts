@@ -58,7 +58,10 @@ export function useSearchHotkey(
   useEffect(() => {
     const onPointerDown = (e: PointerEvent) => {
       const container = containerRef.current
-      const el = e.target instanceof HTMLElement ? e.target : null
+      // `Element`, not `HTMLElement`: the canvas surface is an <svg>, so a
+      // click on a node, an edge or the background targets an SVGElement and
+      // would otherwise read as a click *outside* the canvas.
+      const el = e.target instanceof Element ? e.target : null
       canvasActiveRef.current = !!container && !!el && container.contains(el)
     }
 
